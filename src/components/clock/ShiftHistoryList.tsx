@@ -19,9 +19,10 @@ import { typography } from '@/theme/typography';
 type ShiftHistoryListProps = {
   shifts: Shift[];
   onEdit: (shift: Shift) => void;
+  jobNameById?: Record<string, string>;
 };
 
-export function ShiftHistoryList({ shifts, onEdit }: ShiftHistoryListProps) {
+export function ShiftHistoryList({ shifts, onEdit, jobNameById }: ShiftHistoryListProps) {
   const { colors } = useTheme();
   const bumpShifts = useAppStore((s) => s.bumpShifts);
   const [deleting, setDeleting] = useState<Shift | null>(null);
@@ -42,11 +43,13 @@ export function ShiftHistoryList({ shifts, onEdit }: ShiftHistoryListProps) {
       {completed.map((shift) => {
         const minutes = calculateWorkedMinutes(shift);
         const gross = calculateWorkedHours(shift) * shift.hourlyRateSnapshot;
+        const jobName = jobNameById?.[shift.jobId];
         return (
           <Card key={shift.id} style={styles.item}>
             <View style={styles.itemMain}>
               <Text style={[typography.bodyMedium, { color: colors.text }]}>
                 {formatFullDate(shift.clockIn)}
+                {jobName ? ` · ${jobName}` : ''}
               </Text>
               <Text style={[typography.caption, { color: colors.textSecondary }]}>
                 {formatTime(shift.clockIn)} – {shift.clockOut ? formatTime(shift.clockOut) : '…'}

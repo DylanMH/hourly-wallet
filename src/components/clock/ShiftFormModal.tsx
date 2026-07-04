@@ -1,15 +1,16 @@
 import DatePicker from '@expo/ui/community/datetime-picker';
 import { addHours, addMinutes, format, isValid, parse } from 'date-fns';
 import { Calendar, TreePine, Umbrella } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { getPaySettings } from '@/db/queries/settingsQueries';
+import { Select } from '@/components/ui/Select';
+import { getDefaultJob, getJobs } from '@/db/queries/jobQueries';
 import { insertShift, updateShift } from '@/db/queries/shiftQueries';
 import { hapticSuccess } from '@/lib/haptics';
-import type { Shift } from '@/lib/types';
+import type { Job, Shift } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
 import { useTheme } from '@/theme/useTheme';
 import { radius, spacing } from '@/theme/spacing';
@@ -85,6 +86,24 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
   const [notes, setNotes] = useState(shift?.notes ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(shift?.jobId ?? null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const [all, fallback] = await Promise.all([getJobs(), getDefaultJob()]);
+      if (cancelled) return;
+      setJobs(all);
+      setSelectedJobId((prev) => prev ?? fallback?.id ?? all[0]?.id ?? null);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedJob = jobs.find((j) => j.id === selectedJobId) ?? jobs[0];
 
   const [picker, setPicker] = useState<
     | null
@@ -185,10 +204,15 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
 
     setSaving(true);
     try {
-      const settings = await getPaySettings();
+      const job = selectedJob;
+      if (!job) {
+        setError('No job available. Add a job in settings first.');
+        return;
+      }
       if (shift) {
         await updateShift({
           ...shift,
+          jobId: job.id,
           date,
           clockIn: clockInDt.toISOString(),
           clockOut: clockOutDt?.toISOString(),
@@ -200,6 +224,7 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
         });
       } else {
         await insertShift({
+          jobId: job.id,
           date,
           clockIn: clockInDt.toISOString(),
           clockOut: clockOutDt?.toISOString(),
@@ -209,13 +234,13 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
           breaks: [],
           isHolidayPay,
           isPTO,
-          hourlyRateSnapshot: settings.hourlyRate,
-          overtimeEnabledSnapshot: settings.overtimeEnabled,
-          overtimeMultiplierSnapshot: settings.overtimeMultiplier,
-          overtimeThresholdSnapshot: settings.overtimeThresholdHours,
-          taxPercentSnapshot: settings.taxPercent,
-          holidayPayInOvertimeSnapshot: settings.holidayPayInOvertime,
-          ptoInOvertimeSnapshot: settings.allowPTOInOvertime,
+          hourlyRateSnapshot: job.hourlyRate,
+          overtimeEnabledSnapshot: job.overtimeEnabled,
+          overtimeMultiplierSnapshot: job.overtimeMultiplier,
+          overtimeThresholdSnapshot: job.overtimeThresholdHours,
+          taxPercentSnapshot: job.taxPercent,
+          holidayPayInOvertimeSnapshot: job.holidayPayInOvertime,
+          ptoInOvertimeSnapshot: job.allowPTOInOvertime,
         });
       }
       hapticSuccess();
@@ -243,6 +268,15 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
               <Text style={[typography.bodyMedium, { color: colors.text }]}>{dateDisplay}</Text>
             </View>
           </Pressable>
+
+          {selectedJob ? (
+            <Select
+              label="Job"
+              value={selectedJob.id}
+              options={jobs.map((j) => ({ label: j.name, value: j.id }))}
+              onChange={setSelectedJobId}
+            />
+          ) : null}
 
           {!isPTO ? (
             <>

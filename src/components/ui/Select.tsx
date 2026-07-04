@@ -40,7 +40,7 @@ export function Select<T extends string>({ label, value, options, onChange, styl
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
+          <View style={[styles.sheet, { backgroundColor: colors.surface }]} pointerEvents="box-none">
             {label ? (
               <Text
                 style={[typography.heading, styles.sheetTitle, { color: colors.text }]}>

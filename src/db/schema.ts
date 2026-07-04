@@ -17,6 +17,26 @@ CREATE TABLE IF NOT EXISTS pay_settings (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  hourly_rate REAL NOT NULL,
+  overtime_enabled INTEGER NOT NULL,
+  overtime_multiplier REAL NOT NULL,
+  overtime_threshold_hours REAL NOT NULL,
+  tax_percent REAL NOT NULL,
+  default_lunch_minutes INTEGER NOT NULL,
+  default_break_minutes INTEGER NOT NULL,
+  break_paid_by_default INTEGER NOT NULL,
+  holiday_pay_in_overtime INTEGER NOT NULL,
+  allow_pto_in_overtime INTEGER NOT NULL,
+  pay_period TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS app_prefs (
   key TEXT PRIMARY KEY NOT NULL,
   value TEXT NOT NULL
@@ -24,6 +44,7 @@ CREATE TABLE IF NOT EXISTS app_prefs (
 
 CREATE TABLE IF NOT EXISTS shifts (
   id TEXT PRIMARY KEY NOT NULL,
+  job_id TEXT NOT NULL REFERENCES jobs(id),
   date TEXT NOT NULL,
   clock_in TEXT NOT NULL,
   clock_out TEXT,

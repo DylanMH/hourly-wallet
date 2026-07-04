@@ -14,6 +14,8 @@ type AppState = {
   billsVersion: number;
   /** Incremented whenever settings change. */
   settingsVersion: number;
+  /** Incremented whenever jobs change. */
+  jobsVersion: number;
   setThemePreference: (theme: ThemePreference) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
@@ -22,6 +24,7 @@ type AppState = {
   bumpShifts: () => void;
   bumpBills: () => void;
   bumpSettings: () => void;
+  bumpJobs: () => void;
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -33,6 +36,7 @@ export const useAppStore = create<AppState>((set) => ({
   shiftsVersion: 0,
   billsVersion: 0,
   settingsVersion: 0,
+  jobsVersion: 0,
   setThemePreference: (themePreference) => set({ themePreference }),
   setHapticsEnabled: (hapticsEnabled) => set({ hapticsEnabled }),
   setNotificationsEnabled: (notificationsEnabled) => set({ notificationsEnabled }),
@@ -41,4 +45,5 @@ export const useAppStore = create<AppState>((set) => ({
   bumpShifts: () => set((s) => ({ shiftsVersion: s.shiftsVersion + 1 })),
   bumpBills: () => set((s) => ({ billsVersion: s.billsVersion + 1 })),
   bumpSettings: () => set((s) => ({ settingsVersion: s.settingsVersion + 1 })),
+  bumpJobs: () => set((s) => ({ jobsVersion: s.jobsVersion + 1 })),
 }));

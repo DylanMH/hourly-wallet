@@ -4,6 +4,7 @@ import type { Shift, ShiftBreak } from '@/lib/types';
 
 type ShiftRow = {
   id: string;
+  job_id: string;
   date: string;
   clock_in: string;
   clock_out: string | null;
@@ -34,6 +35,7 @@ type BreakRow = {
 function rowToShift(row: ShiftRow, breaks: ShiftBreak[]): Shift {
   return {
     id: row.id,
+    jobId: row.job_id,
     date: row.date,
     clockIn: row.clock_in,
     clockOut: row.clock_out ?? undefined,
@@ -136,11 +138,12 @@ export async function insertShift(
   };
   await db.runAsync(
     `INSERT INTO shifts (
-      id, date, clock_in, clock_out, lunch_start, lunch_end, notes,
+      id, job_id, date, clock_in, clock_out, lunch_start, lunch_end, notes,
       is_holiday_pay, is_pto, hourly_rate_snapshot, overtime_enabled_snapshot, overtime_multiplier_snapshot,
       overtime_threshold_snapshot, tax_percent_snapshot, holiday_pay_in_overtime_snapshot, pto_in_overtime_snapshot, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     full.id,
+    full.jobId,
     full.date,
     full.clockIn,
     full.clockOut ?? null,
@@ -170,10 +173,11 @@ export async function updateShift(shift: Shift): Promise<Shift> {
   const updated: Shift = { ...shift, updatedAt: new Date().toISOString() };
   await db.runAsync(
     `UPDATE shifts SET
-      date = ?, clock_in = ?, clock_out = ?, lunch_start = ?, lunch_end = ?, notes = ?,
+      job_id = ?, date = ?, clock_in = ?, clock_out = ?, lunch_start = ?, lunch_end = ?, notes = ?,
       is_holiday_pay = ?, is_pto = ?, hourly_rate_snapshot = ?, overtime_enabled_snapshot = ?, overtime_multiplier_snapshot = ?,
       overtime_threshold_snapshot = ?, tax_percent_snapshot = ?, holiday_pay_in_overtime_snapshot = ?, pto_in_overtime_snapshot = ?, updated_at = ?
     WHERE id = ?`,
+    updated.jobId,
     updated.date,
     updated.clockIn,
     updated.clockOut ?? null,

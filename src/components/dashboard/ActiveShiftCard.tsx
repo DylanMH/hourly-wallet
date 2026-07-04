@@ -17,10 +17,12 @@ type ActiveShiftCardProps = {
   shift: Shift | null;
   status: ClockStatus;
   todayMinutes: number;
+  jobName?: string;
+  jobId?: string;
   onChanged: () => void;
 };
 
-export function ActiveShiftCard({ shift, status, todayMinutes, onChanged }: ActiveShiftCardProps) {
+export function ActiveShiftCard({ shift, status, todayMinutes, jobName, jobId, onChanged }: ActiveShiftCardProps) {
   const { colors } = useTheme();
   const [busy, setBusy] = useState(false);
   const [, setTick] = useState(0);
@@ -40,7 +42,7 @@ export function ActiveShiftCard({ shift, status, todayMinutes, onChanged }: Acti
     setBusy(true);
     try {
       if (status === 'not-clocked-in') {
-        await clockIn();
+        await clockIn(jobId);
         hapticSuccess();
       } else if (status === 'on-lunch') {
         await endLunch();
@@ -72,7 +74,9 @@ export function ActiveShiftCard({ shift, status, todayMinutes, onChanged }: Acti
     <Card>
       <View style={styles.header}>
         <Badge label={meta.label} tone={meta.tone} />
-        <Text style={[typography.caption, { color: colors.textSecondary }]}>Today</Text>
+        <Text style={[typography.caption, { color: colors.textSecondary }]}>
+          {jobName ? `${jobName} • Today` : 'Today'}
+        </Text>
       </View>
       <View style={styles.row}>
         <View style={styles.stat}>

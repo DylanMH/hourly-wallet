@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BillsByCategoryChart } from '@/components/reports/BillsByCategoryChart';
@@ -6,6 +6,7 @@ import { WeeklyHoursChart } from '@/components/reports/WeeklyHoursChart';
 import { Card } from '@/components/ui/Card';
 import { MoneyText } from '@/components/ui/MoneyText';
 import { Screen } from '@/components/ui/Screen';
+import { Select } from '@/components/ui/Select';
 import { StatCard } from '@/components/ui/StatCard';
 import { useBillOccurrences } from '@/features/bills/useBillOccurrences';
 import { useShiftsInRange } from '@/features/clock/useShifts';
@@ -15,11 +16,16 @@ import {
   getReportRange,
   ReportPeriod,
 } from '@/features/reports/reportService';
+import { getDefaultJob, getJobs } from '@/db/queries/jobQueries';
+import { useAppStore } from '@/state/appStore';
 import { hapticSelection } from '@/lib/haptics';
 import { formatHoursMinutes } from '@/lib/money';
+import type { Job } from '@/lib/types';
 import { useTheme } from '@/theme/useTheme';
 import { radius, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+
+const ALL_JOBS = 'all';
 
 const PERIODS: { value: ReportPeriod; label: string }[] = [
   { value: 'this-week', label: 'This week' },
@@ -32,8 +38,35 @@ export default function ReportsScreen() {
   const { colors } = useTheme();
   const [period, setPeriod] = useState<ReportPeriod>('this-week');
   const range = useMemo(() => getReportRange(period), [period]);
-  const { shifts } = useShiftsInRange(range);
+  const { shifts: allShifts } = useShiftsInRange(range);
   const { occurrences } = useBillOccurrences();
+
+  const jobsVersion = useAppStore((s) => s.jobsVersion);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState<string>(ALL_JOBS);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [all, fallback] = await Promise.all([getJobs(), getDefaultJob()]);
+      if (!cancelled) {
+        setJobs(all);
+        setSelectedJobId((prev) => {
+          if (prev === ALL_JOBS) return ALL_JOBS;
+          if (all.some((j) => j.id === prev)) return prev;
+          return fallback?.id ?? all[0]?.id ?? ALL_JOBS;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobsVersion]);
+
+  const shifts =
+    selectedJobId === ALL_JOBS
+      ? allShifts
+      : allShifts.filter((s) => s.jobId === selectedJobId);
 
   const report = useMemo(
     () => buildPeriodReport(shifts, occurrences, range),
@@ -41,12 +74,19 @@ export default function ReportsScreen() {
   );
   const dailyHours = useMemo(() => getDailyHours(shifts, range), [shifts, range]);
 
+  const jobOptions = [
+    { label: 'All jobs', value: ALL_JOBS },
+    ...jobs.map((j) => ({ label: j.name, value: j.id })),
+  ];
+
   return (
-    <Screen>
-      <Text style={[typography.title, { color: colors.text }]}>Reports</Text>
-      <Text style={[typography.caption, { color: colors.textSecondary }]}>
-        All pay numbers are estimates.
-      </Text>
+    <Screen showLogo>
+      <Select
+        label="Report view"
+        value={selectedJobId}
+        options={jobOptions}
+        onChange={setSelectedJobId}
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         {PERIODS.map((p) => {

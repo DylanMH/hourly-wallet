@@ -1,4 +1,5 @@
 import { initDatabase } from '@/db/database';
+import { ensureDefaultJob, patchEmptyJobIds } from '@/db/queries/jobQueries';
 import { getAppPref, getPaySettings, setAppPref, updatePaySettings } from '@/db/queries/settingsQueries';
 import { generateAllOccurrences, processAutopayBills } from '@/features/bills/billService';
 import type { PaySettings, ThemePreference } from '@/lib/types';
@@ -17,7 +18,9 @@ const PREF_KEYS = {
  */
 export async function bootstrapApp(): Promise<void> {
   await initDatabase();
+  await patchEmptyJobIds(); // fix any legacy jobs with empty ids
   await getPaySettings(); // seeds defaults if missing
+  await ensureDefaultJob(); // seeds a default job if missing
 
   const store = useAppStore.getState();
   const [onboarding, theme, haptics, notifications] = await Promise.all([

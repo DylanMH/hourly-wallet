@@ -2,9 +2,8 @@ import { Plus, ReceiptText } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BillCard } from '@/components/bills/BillCard';
 import { BillFormModal } from '@/components/bills/BillFormModal';
-import { BillsFilterChips, BillFilter } from '@/components/bills/BillsFilterChips';
+import { BillMonthList } from '@/components/bills/BillMonthList';
 import { BillsSummaryCard } from '@/components/bills/BillsSummaryCard';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -12,43 +11,31 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { removeBill, setOccurrencePaid } from '@/features/bills/billService';
 import { useBillOccurrences } from '@/features/bills/useBillOccurrences';
-import {
-  getBillsDueThisMonth,
-  getBillsDueThisWeek,
-  getOverdueBills,
-} from '@/lib/calculations/bills';
 import { hapticSuccess, hapticWarning } from '@/lib/haptics';
 import type { Bill, BillOccurrenceWithBill } from '@/lib/types';
 import { useTheme } from '@/theme/useTheme';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
+type BillsTab = 'unpaid' | 'paid';
+
+const TABS: { value: BillsTab; label: string }[] = [
+  { value: 'unpaid', label: 'Unpaid' },
+  { value: 'paid', label: 'Paid' },
+];
+
 export default function BillsScreen() {
   const { colors } = useTheme();
   const { occurrences } = useBillOccurrences();
-  const [filter, setFilter] = useState<BillFilter>('due-this-month');
+  const [activeTab, setActiveTab] = useState<BillsTab>('unpaid');
   const [formVisible, setFormVisible] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [deleting, setDeleting] = useState<BillOccurrenceWithBill | null>(null);
 
-  const filtered = useMemo(() => {
-    switch (filter) {
-      case 'due-this-week':
-        return getBillsDueThisWeek(occurrences);
-      case 'due-this-month':
-        return getBillsDueThisMonth(occurrences);
-      case 'overdue':
-        return getOverdueBills(occurrences);
-      case 'paid':
-        return occurrences.filter((o) => o.paid);
-      case 'unpaid':
-        return occurrences.filter((o) => !o.paid);
-      case 'subscriptions':
-        return occurrences.filter((o) => o.bill.category === 'Subscription');
-      default:
-        return occurrences;
-    }
-  }, [occurrences, filter]);
+  const filtered = useMemo(
+    () => occurrences.filter((o) => (activeTab === 'paid' ? o.paid : !o.paid)),
+    [occurrences, activeTab]
+  );
 
   async function togglePaid(occurrence: BillOccurrenceWithBill) {
     await setOccurrencePaid(occurrence, !occurrence.paid);
@@ -59,29 +46,53 @@ export default function BillsScreen() {
     }
   }
 
-  return (
-    <Screen>
-      <View style={styles.header}>
-        <Text style={[typography.title, { color: colors.text }]}>Bills</Text>
-        <Pressable
-          onPress={() => {
-            setEditingBill(null);
-            setFormVisible(true);
-          }}
-          style={[styles.addButton, { backgroundColor: colors.primary }]}
-          hitSlop={8}>
-          <Plus size={20} color={colors.onPrimary} />
-        </Pressable>
-      </View>
+  const addButton = (
+    <Pressable
+      onPress={() => {
+        setEditingBill(null);
+        setFormVisible(true);
+      }}
+      style={[styles.addButton, { backgroundColor: colors.primary }]}
+      hitSlop={8}>
+      <Plus size={20} color={colors.onPrimary} />
+    </Pressable>
+  );
 
+  return (
+    <Screen showLogo right={addButton}>
       <BillsSummaryCard occurrences={occurrences} />
-      <BillsFilterChips value={filter} onChange={setFilter} />
+
+      <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
+        {TABS.map((tab) => {
+          const active = tab.value === activeTab;
+          return (
+            <Pressable
+              key={tab.value}
+              onPress={() => setActiveTab(tab.value)}
+              style={[
+                styles.tab,
+                {
+                  borderBottomColor: active ? colors.primary : colors.border,
+                  borderBottomWidth: active ? 2 : StyleSheet.hairlineWidth,
+                },
+              ]}>
+              <Text
+                style={[
+                  typography.bodyMedium,
+                  { color: active ? colors.primary : colors.textSecondary },
+                ]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {filtered.length === 0 ? (
         <EmptyState
           icon={<ReceiptText size={32} color={colors.textMuted} />}
           title="No bills here"
-          message="Add a bill to start tracking what's due."
+          message={`No ${activeTab} bills. Add a bill to start tracking.`}
           action={
             <Button
               label="Add Bill"
@@ -93,20 +104,15 @@ export default function BillsScreen() {
           }
         />
       ) : (
-        <View style={styles.list}>
-          {filtered.map((occurrence) => (
-            <BillCard
-              key={occurrence.id}
-              occurrence={occurrence}
-              onTogglePaid={togglePaid}
-              onEdit={(o) => {
-                setEditingBill(o.bill);
-                setFormVisible(true);
-              }}
-              onDelete={setDeleting}
-            />
-          ))}
-        </View>
+        <BillMonthList
+          occurrences={filtered}
+          onTogglePaid={togglePaid}
+          onEdit={(o) => {
+            setEditingBill(o.bill);
+            setFormVisible(true);
+          }}
+          onDelete={setDeleting}
+        />
       )}
 
       <BillFormModal
@@ -142,11 +148,6 @@ export default function BillsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   addButton: {
     width: 36,
     height: 36,
@@ -154,7 +155,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  list: {
-    gap: spacing.sm,
+  tabs: {
+    flexDirection: 'row',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.sm,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
 });

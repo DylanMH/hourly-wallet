@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -20,9 +20,10 @@ const STATUS_META: Record<ClockStatus, { label: string; tone: 'default' | 'posit
 type ClockStatusCardProps = {
   shift: Shift | null;
   status: ClockStatus;
+  jobName?: string;
 };
 
-export function ClockStatusCard({ shift, status }: ClockStatusCardProps) {
+export function ClockStatusCard({ shift, status, jobName }: ClockStatusCardProps) {
   const { colors } = useTheme();
   const [now, setNow] = useState(new Date());
 
@@ -30,8 +31,14 @@ export function ClockStatusCard({ shift, status }: ClockStatusCardProps) {
 
   useEffect(() => {
     if (!active) return;
-    const interval = setInterval(() => setNow(new Date()), 1000 * 10);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => setNow(new Date()), 1000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setNow(new Date());
+    });
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
   }, [active]);
 
   const meta = STATUS_META[status];
@@ -42,6 +49,9 @@ export function ClockStatusCard({ shift, status }: ClockStatusCardProps) {
   return (
     <Card style={styles.card}>
       <Badge label={meta.label} tone={meta.tone} />
+      {jobName ? (
+        <Text style={[typography.bodyMedium, { color: colors.text }]}>{jobName}</Text>
+      ) : null}
       <Text style={[typography.displayLarge, { color: colors.text, fontVariant: ['tabular-nums'] }]}>
         {formatHoursMinutes(workedMinutes)}
       </Text>

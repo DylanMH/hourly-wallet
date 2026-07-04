@@ -1,4 +1,4 @@
-import { getPaySettings } from '@/db/queries/settingsQueries';
+import { getDefaultJob, getJobById } from '@/db/queries/jobQueries';
 import { getActiveShift, insertShift, updateShift } from '@/db/queries/shiftQueries';
 import { toDateKey } from '@/lib/dates';
 import { generateId } from '@/lib/ids';
@@ -12,26 +12,30 @@ export function getClockStatus(shift: Shift | null): ClockStatus {
   return 'clocked-in';
 }
 
-export async function clockIn(): Promise<Shift> {
+export async function clockIn(jobId?: string): Promise<Shift> {
   const active = await getActiveShift();
   if (active) {
     throw new Error('Already clocked in. Clock out before starting a new shift.');
   }
-  const settings = await getPaySettings();
+  const job = jobId ? await getJobById(jobId) : await getDefaultJob();
+  if (!job) {
+    throw new Error('No job configured. Add a job in settings.');
+  }
   const now = new Date();
   const shift = await insertShift({
+    jobId: job.id,
     date: toDateKey(now),
     clockIn: now.toISOString(),
     breaks: [],
     isHolidayPay: false,
     isPTO: false,
-    hourlyRateSnapshot: settings.hourlyRate,
-    overtimeEnabledSnapshot: settings.overtimeEnabled,
-    overtimeMultiplierSnapshot: settings.overtimeMultiplier,
-    overtimeThresholdSnapshot: settings.overtimeThresholdHours,
-    taxPercentSnapshot: settings.taxPercent,
-    holidayPayInOvertimeSnapshot: settings.holidayPayInOvertime,
-    ptoInOvertimeSnapshot: settings.allowPTOInOvertime,
+    hourlyRateSnapshot: job.hourlyRate,
+    overtimeEnabledSnapshot: job.overtimeEnabled,
+    overtimeMultiplierSnapshot: job.overtimeMultiplier,
+    overtimeThresholdSnapshot: job.overtimeThresholdHours,
+    taxPercentSnapshot: job.taxPercent,
+    holidayPayInOvertimeSnapshot: job.holidayPayInOvertime,
+    ptoInOvertimeSnapshot: job.allowPTOInOvertime,
   });
   useAppStore.getState().bumpShifts();
   return shift;
@@ -90,7 +94,7 @@ export async function startBreak(): Promise<Shift> {
   const status = getClockStatus(active);
   if (status === 'on-break') throw new Error('A break is already active.');
   if (status === 'on-lunch') throw new Error('End lunch before starting a break.');
-  const settings = await getPaySettings();
+  const job = await getJobById(active.jobId);
   const updated = await updateShift({
     ...active,
     breaks: [
@@ -98,7 +102,7 @@ export async function startBreak(): Promise<Shift> {
       {
         id: generateId(),
         start: new Date().toISOString(),
-        paid: settings.breakPaidByDefault,
+        paid: job?.breakPaidByDefault ?? false,
       },
     ],
   });

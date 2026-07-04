@@ -13,19 +13,31 @@ import {
   markOnboardingComplete,
   savePaySettings,
 } from '@/features/settings/settingsService';
+import { getDefaultJob, updateJob } from '@/db/queries/jobQueries';
 import { hapticSuccess } from '@/lib/haptics';
-import { BILL_CATEGORIES, BillCategory } from '@/lib/types';
+import { BILL_CATEGORIES, BillCategory, PayPeriod } from '@/lib/types';
+import { useAppStore } from '@/state/appStore';
 import { useTheme } from '@/theme/useTheme';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
+const PAY_PERIODS: { label: string; value: PayPeriod }[] = [
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Biweekly', value: 'biweekly' },
+  { label: 'Semi-monthly', value: 'semi-monthly' },
+  { label: 'Monthly', value: 'monthly' },
+];
+
 export default function OnboardingScreen() {
   const { colors } = useTheme();
+  const bumpJobs = useAppStore((s) => s.bumpJobs);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  const [jobName, setJobName] = useState('');
   const [hourlyRate, setHourlyRate] = useState('15');
   const [taxPercent, setTaxPercent] = useState('20');
+  const [payPeriod, setPayPeriod] = useState<PayPeriod>('weekly');
   const [overtimeEnabled, setOvertimeEnabled] = useState(true);
   const [overtimeMultiplier, setOvertimeMultiplier] = useState('1.5');
   const [overtimeThreshold, setOvertimeThreshold] = useState('40');
@@ -35,16 +47,35 @@ export default function OnboardingScreen() {
   const [billCategory, setBillCategory] = useState<BillCategory>('Mortgage / Rent');
   const [billDueDay, setBillDueDay] = useState('1');
 
+  const jobStepValid = jobName.trim().length > 0 && parseFloat(hourlyRate) > 0;
+
   async function finish(withBill: boolean) {
-    if (saving) return;
+    if (saving || !jobStepValid) return;
     setSaving(true);
     try {
-      await savePaySettings({
+      const job = await getDefaultJob();
+      if (!job) {
+        throw new Error('No default job found. Please restart the app.');
+      }
+      const updatedJob = {
+        ...job,
+        name: jobName.trim(),
         hourlyRate: parseFloat(hourlyRate) || 15,
         taxPercent: parseFloat(taxPercent) || 20,
+        payPeriod,
         overtimeEnabled,
         overtimeMultiplier: parseFloat(overtimeMultiplier) || 1.5,
         overtimeThresholdHours: parseFloat(overtimeThreshold) || 40,
+      };
+      await updateJob(updatedJob);
+      bumpJobs();
+      await savePaySettings({
+        hourlyRate: updatedJob.hourlyRate,
+        taxPercent: updatedJob.taxPercent,
+        payPeriod: updatedJob.payPeriod,
+        overtimeEnabled: updatedJob.overtimeEnabled,
+        overtimeMultiplier: updatedJob.overtimeMultiplier,
+        overtimeThresholdHours: updatedJob.overtimeThresholdHours,
       });
       if (withBill && billName.trim() && parseFloat(billAmount) > 0) {
         await createBill({
@@ -66,11 +97,6 @@ export default function OnboardingScreen() {
     }
   }
 
-  async function skip() {
-    await markOnboardingComplete();
-    router.replace('/(tabs)/dashboard');
-  }
-
   return (
     <Screen>
       <View style={styles.hero}>
@@ -86,7 +112,16 @@ export default function OnboardingScreen() {
 
       {step === 0 ? (
         <Card style={styles.card}>
-          <Text style={[typography.heading, { color: colors.text }]}>Your pay</Text>
+          <Text style={[typography.heading, { color: colors.text }]}>Add your first job</Text>
+          <Text style={[typography.body, { color: colors.textSecondary }]}>
+            You need at least one job before you can start tracking shifts.
+          </Text>
+          <Input
+            label="Job name"
+            value={jobName}
+            onChangeText={setJobName}
+            placeholder="Barista, Delivery, etc."
+          />
           <Input
             label="Hourly rate"
             prefix="$"
@@ -101,6 +136,12 @@ export default function OnboardingScreen() {
             onChangeText={setTaxPercent}
             keyboardType="decimal-pad"
             placeholder="20"
+          />
+          <Select
+            label="Pay period"
+            value={payPeriod}
+            onChange={setPayPeriod}
+            options={PAY_PERIODS}
           />
           <View style={styles.switchRow}>
             <Text style={[typography.bodyMedium, { color: colors.text }]}>Overtime enabled</Text>
@@ -124,8 +165,12 @@ export default function OnboardingScreen() {
               />
             </>
           ) : null}
-          <Button label="Next" size="lg" onPress={() => setStep(1)} />
-          <Button label="Skip and use defaults" variant="ghost" onPress={skip} />
+          <Button
+            label="Next"
+            size="lg"
+            disabled={!jobStepValid}
+            onPress={() => setStep(1)}
+          />
         </Card>
       ) : (
         <Card style={styles.card}>

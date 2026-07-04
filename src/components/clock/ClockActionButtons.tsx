@@ -17,10 +17,11 @@ import { spacing } from '@/theme/spacing';
 
 type ClockActionButtonsProps = {
   status: ClockStatus;
+  jobId?: string;
   onChanged: () => void;
 };
 
-export function ClockActionButtons({ status, onChanged }: ClockActionButtonsProps) {
+export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButtonsProps) {
   const [busy, setBusy] = useState(false);
   const [confirmAutoClose, setConfirmAutoClose] = useState(false);
 
@@ -51,7 +52,7 @@ export function ClockActionButtons({ status, onChanged }: ClockActionButtonsProp
             size="lg"
             variant="positive"
             loading={busy}
-            onPress={() => run(clockIn, hapticSuccess)}
+            onPress={() => run(() => clockIn(jobId), hapticSuccess)}
           />
         );
       case 'on-lunch':

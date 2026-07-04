@@ -1,5 +1,25 @@
 export type PayPeriod = 'weekly' | 'biweekly' | 'semi-monthly' | 'monthly';
 
+export type Job = {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  hourlyRate: number;
+  overtimeEnabled: boolean;
+  overtimeMultiplier: number;
+  overtimeThresholdHours: number;
+  taxPercent: number;
+  defaultLunchMinutes: number;
+  defaultBreakMinutes: number;
+  breakPaidByDefault: boolean;
+  holidayPayInOvertime: boolean;
+  allowPTOInOvertime: boolean;
+  payPeriod: PayPeriod;
+  currency: 'USD';
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PaySettings = {
   id: string;
   hourlyRate: number;
@@ -27,6 +47,7 @@ export type ShiftBreak = {
 
 export type Shift = {
   id: string;
+  jobId: string;
   date: string;
   clockIn: string;
   clockOut?: string;

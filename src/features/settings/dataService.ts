@@ -9,7 +9,8 @@ import {
 } from '@/db/queries/billQueries';
 import { getPaySettings, updatePaySettings } from '@/db/queries/settingsQueries';
 import { getAllShifts, insertShift } from '@/db/queries/shiftQueries';
-import type { Bill, BillCategory, BillOccurrence, BillRecurrence, Shift } from '@/lib/types';
+import { getJobs, insertJob, ensureDefaultJob } from '@/db/queries/jobQueries';
+import type { Bill, BillCategory, BillOccurrence, BillRecurrence, Job, Shift } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
 
 const shiftBreakSchema = z.object({
@@ -21,6 +22,7 @@ const shiftBreakSchema = z.object({
 
 const shiftSchema = z.object({
   id: z.string(),
+  jobId: z.string().default('default'),
   date: z.string(),
   clockIn: z.string(),
   clockOut: z.string().optional(),
@@ -85,11 +87,32 @@ const settingsSchema = z.object({
   payPeriod: z.enum(['weekly', 'biweekly', 'semi-monthly', 'monthly']),
 });
 
+const jobSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  isDefault: z.boolean(),
+  hourlyRate: z.number(),
+  overtimeEnabled: z.boolean(),
+  overtimeMultiplier: z.number(),
+  overtimeThresholdHours: z.number(),
+  taxPercent: z.number(),
+  defaultLunchMinutes: z.number(),
+  defaultBreakMinutes: z.number(),
+  breakPaidByDefault: z.boolean(),
+  holidayPayInOvertime: z.boolean().default(false),
+  allowPTOInOvertime: z.boolean().default(false),
+  payPeriod: z.enum(['weekly', 'biweekly', 'semi-monthly', 'monthly']),
+  currency: z.literal('USD').default('USD'),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 const backupSchema = z.object({
   app: z.literal('hourly-wallet'),
   version: z.number(),
   exportedAt: z.string(),
   settings: settingsSchema,
+  jobs: z.array(jobSchema).default([]),
   shifts: z.array(shiftSchema),
   bills: z.array(billSchema),
   billOccurrences: z.array(occurrenceSchema),
@@ -99,13 +122,14 @@ export type Backup = z.infer<typeof backupSchema>;
 
 export async function exportData(): Promise<string> {
   const settings = await getPaySettings();
+  const jobs = await getJobs();
   const shifts = await getAllShifts();
   const bills = await getBills(true);
   const billOccurrences = await getAllOccurrences();
 
   const backup: Backup = {
     app: 'hourly-wallet',
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     settings: {
       hourlyRate: settings.hourlyRate,
@@ -120,6 +144,7 @@ export async function exportData(): Promise<string> {
       allowPTOInOvertime: settings.allowPTOInOvertime,
       payPeriod: settings.payPeriod,
     },
+    jobs,
     shifts,
     bills,
     billOccurrences,
@@ -146,12 +171,20 @@ export function validateBackup(json: string): Backup {
 export async function importData(backup: Backup): Promise<void> {
   const db = getDatabase();
   await db.execAsync(
-    'DELETE FROM shift_breaks; DELETE FROM shifts; DELETE FROM bill_occurrences; DELETE FROM bills;'
+    'DELETE FROM shift_breaks; DELETE FROM shifts; DELETE FROM jobs; DELETE FROM bill_occurrences; DELETE FROM bills;'
   );
   await updatePaySettings(backup.settings);
 
+  for (const job of backup.jobs) {
+    await insertJob(job as Job);
+  }
+  const defaultJob = await ensureDefaultJob();
+
   for (const shift of backup.shifts) {
-    await insertShift(shift as Shift);
+    await insertShift({
+      ...(shift as Shift),
+      jobId: shift.jobId || defaultJob.id,
+    });
   }
   for (const bill of backup.bills) {
     await insertBill({
@@ -166,11 +199,12 @@ export async function importData(backup: Backup): Promise<void> {
 
   const store = useAppStore.getState();
   store.bumpSettings();
+  store.bumpJobs();
   store.bumpShifts();
   store.bumpBills();
 }
 
-/** Deletes all shifts, bills, and occurrences. Settings are kept. */
+/** Deletes all shifts, bills, and occurrences. Settings and jobs are kept. */
 export async function resetAllData(): Promise<void> {
   const db = getDatabase();
   await db.execAsync(
