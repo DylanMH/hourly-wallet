@@ -11,7 +11,7 @@ import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Select } from '@/components/ui/Select';
 import { useActiveShift } from '@/features/clock/useActiveShift';
 import { useRecentShifts } from '@/features/clock/useShifts';
-import { getDefaultJob, getJobs } from '@/db/queries/jobQueries';
+import { getJobs } from '@/db/queries/jobQueries';
 import type { Job, Shift } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
 import { useTheme } from '@/theme/useTheme';
@@ -34,12 +34,13 @@ export default function ClockScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [all, fallback] = await Promise.all([getJobs(), getDefaultJob()]);
+      const all = await getJobs();
       if (!cancelled) {
         setJobs(all);
         setSelectedJobId((prev) => {
-          if (prev && all.some((j) => j.id === prev)) return prev;
-          return fallback?.id ?? all[0]?.id;
+          const hourly = all.filter((j) => !j.isSalaried);
+          if (prev && hourly.some((j) => j.id === prev)) return prev;
+          return hourly[0]?.id;
         });
       }
     })();
@@ -48,25 +49,34 @@ export default function ClockScreen() {
     };
   }, [jobsVersion]);
 
+  const hourlyJobs = useMemo(() => jobs.filter((j) => !j.isSalaried), [jobs]);
   const jobNameById = useMemo(
-    () => Object.fromEntries(jobs.map((j) => [j.id, j.name])),
-    [jobs]
+    () => Object.fromEntries(hourlyJobs.map((j) => [j.id, j.name])),
+    [hourlyJobs]
   );
   const activeJobName = shift ? jobNameById[shift.jobId] : undefined;
   const targetJobName = active ? activeJobName : jobNameById[selectedJobId ?? ''];
   const displayJobId = active ? shift?.jobId : selectedJobId;
 
-  const jobOptions = jobs.map((j) => ({ label: j.name, value: j.id }));
+  const jobOptions = hourlyJobs.map((j) => ({ label: j.name, value: j.id }));
 
   const filteredShifts = useMemo(
-    () => (displayJobId ? shifts.filter((s) => s.jobId === displayJobId) : shifts),
-    [shifts, displayJobId]
+    () =>
+      shifts.filter((s) => {
+        if (jobNameById[s.jobId] === undefined) return false;
+        return displayJobId ? s.jobId === displayJobId : true;
+      }),
+    [shifts, displayJobId, jobNameById]
   );
 
   return (
     <Screen showLogo>
       <ClockStatusCard shift={shift} status={status} jobName={targetJobName} />
-      {active ? null : (
+      {hourlyJobs.length === 0 ? (
+        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center' }]}>
+          Clock-in is only available for hourly jobs.
+        </Text>
+      ) : active ? null : (
         <Select
           label="Clock into"
           value={selectedJobId ?? ''}
@@ -74,21 +84,25 @@ export default function ClockScreen() {
           onChange={setSelectedJobId}
         />
       )}
-      <ClockActionButtons status={status} jobId={selectedJobId} onChanged={refresh} />
+      {hourlyJobs.length > 0 ? (
+        <ClockActionButtons status={status} jobId={selectedJobId} onChanged={refresh} />
+      ) : null}
 
       <SectionHeader
         title="Shift History"
         action={
-          <Pressable
-            onPress={() => {
-              setEditingShift(null);
-              setFormVisible(true);
-            }}
-            style={styles.addButton}
-            hitSlop={8}>
-            <Plus size={18} color={colors.primary} />
-            <Text style={[typography.captionMedium, { color: colors.primary }]}>Add shift</Text>
-          </Pressable>
+          hourlyJobs.length > 0 ? (
+            <Pressable
+              onPress={() => {
+                setEditingShift(null);
+                setFormVisible(true);
+              }}
+              style={styles.addButton}
+              hitSlop={8}>
+              <Plus size={18} color={colors.primary} />
+              <Text style={[typography.captionMedium, { color: colors.primary }]}>Add shift</Text>
+            </Pressable>
+          ) : undefined
         }
       />
       <ShiftWeekList

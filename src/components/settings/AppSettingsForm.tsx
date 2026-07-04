@@ -1,4 +1,6 @@
+import Constants from 'expo-constants';
 import React, { useState } from 'react';
+import { version as appVersion } from '../../../package.json';
 import { Modal, ScrollView, Share, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
@@ -37,6 +39,10 @@ export function AppSettingsForm() {
   const [confirmImport, setConfirmImport] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [message, setMessage] = useState('');
+
+  const appVariant = __DEV__
+    ? 'development'
+    : ((Constants.expoConfig?.extra?.appVariant as string | undefined) ?? 'production');
 
   async function handleNotificationsToggle(enabled: boolean) {
     if (enabled) {
@@ -106,6 +112,9 @@ export function AppSettingsForm() {
       {message ? (
         <Text style={[typography.caption, { color: colors.textSecondary }]}>{message}</Text>
       ) : null}
+      <Text style={[typography.caption, { color: colors.textMuted, textAlign: 'center' }]}>
+        Hourly Wallet v{appVersion} · {appVariant} build
+      </Text>
 
       <Modal visible={importVisible} transparent animationType="slide" onRequestClose={() => setImportVisible(false)}>
         <View style={styles.backdrop}>

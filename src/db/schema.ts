@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   is_default INTEGER NOT NULL DEFAULT 0,
+  is_salaried INTEGER NOT NULL DEFAULT 0,
+  salary_amount REAL NOT NULL DEFAULT 0,
+  salary_period TEXT NOT NULL DEFAULT 'monthly',
   hourly_rate REAL NOT NULL,
   overtime_enabled INTEGER NOT NULL,
   overtime_multiplier REAL NOT NULL,
@@ -32,6 +35,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   holiday_pay_in_overtime INTEGER NOT NULL,
   allow_pto_in_overtime INTEGER NOT NULL,
   pay_period TEXT NOT NULL,
+  work_days_per_week INTEGER NOT NULL DEFAULT 5,
   currency TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

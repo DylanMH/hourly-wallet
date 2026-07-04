@@ -6,8 +6,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ShiftHistoryList } from '@/components/clock/ShiftHistoryList';
 import { getJobs } from '@/db/queries/jobQueries';
 import { calculateWeeklyPay } from '@/lib/calculations/pay';
-import { calculateWorkedHours, calculateWorkedMinutes } from '@/lib/calculations/shifts';
-import { formatFullDate, WEEK_STARTS_ON } from '@/lib/dates';
+import { calculateWorkedMinutes } from '@/lib/calculations/shifts';
+import { WEEK_STARTS_ON } from '@/lib/dates';
 import { formatCurrency, formatHoursMinutes } from '@/lib/money';
 import type { Job, Shift } from '@/lib/types';
 import { useTheme } from '@/theme/useTheme';
@@ -61,7 +61,7 @@ export function ShiftWeekList({ shifts, onEdit }: ShiftWeekListProps) {
       list.push(shift);
       map.set(key, list);
     }
-    return Array.from(map.entries()).sort((a, b) => (a[0] > b[0] ? -1 : 1));
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [shifts]);
 
   if (weeks.length === 0) {
@@ -110,7 +110,11 @@ export function ShiftWeekList({ shifts, onEdit }: ShiftWeekListProps) {
             </Pressable>
 
             {isExpanded ? (
-              <View style={styles.days}>
+              <View
+                style={[
+                  styles.days,
+                  { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md },
+                ]}>
                 <ShiftDayList shifts={weekShifts} onEdit={onEdit} jobNameById={jobNameById} />
               </View>
             ) : null}
@@ -130,8 +134,6 @@ function ShiftDayList({
   onEdit: (shift: Shift) => void;
   jobNameById: Record<string, string>;
 }) {
-  const { colors } = useTheme();
-
   const days = useMemo(() => {
     const map = new Map<string, Shift[]>();
     const sorted = [...shifts].sort(
@@ -143,28 +145,16 @@ function ShiftDayList({
       list.push(shift);
       map.set(key, list);
     }
-    return Array.from(map.entries()).sort((a, b) => (a[0] > b[0] ? -1 : 1));
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [shifts]);
 
   return (
     <View style={styles.dayList}>
-      {days.map(([key, dayShifts]) => {
-        const totalMinutes = dayShifts.reduce((sum, s) => sum + calculateWorkedMinutes(s), 0);
-        const gross = dayShifts.reduce((sum, s) => sum + calculateWorkedHours(s) * s.hourlyRateSnapshot, 0);
-        return (
-          <View key={key} style={styles.day}>
-            <View style={styles.dayHeader}>
-              <Text style={[typography.bodyMedium, { color: colors.text }]}>
-                {formatFullDate(dayShifts[0].clockIn)}
-              </Text>
-              <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                {formatHoursMinutes(totalMinutes)} · {formatCurrency(gross)} gross
-              </Text>
-            </View>
-            <ShiftHistoryList shifts={dayShifts} onEdit={onEdit} jobNameById={jobNameById} />
-          </View>
-        );
-      })}
+      {days.map(([key, dayShifts]) => (
+        <View key={key} style={styles.day}>
+          <ShiftHistoryList shifts={dayShifts} onEdit={onEdit} jobNameById={jobNameById} />
+        </View>
+      ))}
     </View>
   );
 }
@@ -195,8 +185,5 @@ const styles = StyleSheet.create({
   },
   day: {
     gap: spacing.sm,
-  },
-  dayHeader: {
-    gap: 2,
   },
 });

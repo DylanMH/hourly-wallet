@@ -166,6 +166,34 @@ export async function getOccurrencesBetween(
   return attachBills(rows);
 }
 
+export async function getPaidOccurrenceYears(): Promise<number[]> {
+  const db = getDatabase();
+  const rows = await db.getAllAsync<{ year: string }>(
+    "SELECT DISTINCT strftime('%Y', paid_at) as year FROM bill_occurrences WHERE paid = 1 AND paid_at IS NOT NULL ORDER BY year DESC"
+  );
+  return rows.map((r) => parseInt(r.year, 10)).filter((y) => !isNaN(y));
+}
+
+export async function getPaidOccurrencesInRange(
+  paidStartIso: string,
+  paidEndIso: string,
+  dueStartIso: string,
+  dueEndIso: string
+): Promise<BillOccurrenceWithBill[]> {
+  const db = getDatabase();
+  const rows = await db.getAllAsync<OccurrenceRow>(
+    `SELECT * FROM bill_occurrences
+     WHERE paid = 1
+       AND ((paid_at >= ? AND paid_at <= ?) OR (paid_at IS NULL AND due_date >= ? AND due_date <= ?))
+     ORDER BY paid_at ASC, due_date ASC`,
+    paidStartIso,
+    paidEndIso,
+    dueStartIso,
+    dueEndIso
+  );
+  return attachBills(rows);
+}
+
 export async function getAllOccurrences(): Promise<BillOccurrence[]> {
   const db = getDatabase();
   const rows = await db.getAllAsync<OccurrenceRow>(

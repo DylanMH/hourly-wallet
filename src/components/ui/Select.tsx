@@ -32,7 +32,7 @@ export function Select<T extends string>({ label, value, options, onChange, styl
           styles.trigger,
           { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
         ]}>
-        <Text style={[typography.body, { color: colors.text }]}>
+        <Text style={[typography.body, { color: colors.text }]} numberOfLines={1}>
           {selected?.label ?? 'Select…'}
         </Text>
         <ChevronDown size={18} color={colors.textMuted} />

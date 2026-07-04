@@ -3,9 +3,11 @@ import {
   addWeeks,
   addYears,
   endOfMonth,
+  endOfYear,
   getDaysInMonth,
   isAfter,
   isBefore,
+  isWithinInterval,
   parseISO,
   setDate,
   startOfDay,
@@ -23,7 +25,7 @@ import {
   updateBill as updateBillRow,
   updateOccurrence,
 } from '@/db/queries/billQueries';
-import { toDateKey } from '@/lib/dates';
+import { DateRange, toDateKey } from '@/lib/dates';
 import { cancelBillReminder, scheduleBillReminder } from '@/lib/notifications';
 import type { Bill, BillOccurrence } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
@@ -36,24 +38,20 @@ function clampDueDay(base: Date, dueDay: number): Date {
   return setDate(base, day);
 }
 
-/**
- * Computes all due dates for a bill from its anchor date through the horizon.
- */
-export function computeDueDates(bill: Bill, now: Date = new Date()): string[] {
-  const horizon = endOfMonth(addMonths(now, HORIZON_MONTHS));
+function computeDueDatesUntil(bill: Bill, until: Date): Date[] {
   const dates: Date[] = [];
 
   if (bill.recurrence === 'one-time') {
     if (bill.dueDate) dates.push(startOfDay(parseISO(bill.dueDate)));
   } else if (bill.recurrence === 'monthly' && bill.dueDay != null) {
     let cursor = startOfMonth(parseISO(bill.createdAt));
-    while (!isAfter(cursor, horizon)) {
+    while (!isAfter(cursor, until)) {
       dates.push(startOfDay(clampDueDay(cursor, bill.dueDay)));
       cursor = addMonths(cursor, 1);
     }
   } else if (bill.dueDate) {
     let cursor = startOfDay(parseISO(bill.dueDate));
-    while (!isAfter(cursor, horizon)) {
+    while (!isAfter(cursor, until)) {
       dates.push(cursor);
       if (bill.recurrence === 'weekly') cursor = addWeeks(cursor, 1);
       else if (bill.recurrence === 'biweekly') cursor = addWeeks(cursor, 2);
@@ -66,8 +64,19 @@ export function computeDueDates(bill: Bill, now: Date = new Date()): string[] {
   // Skip occurrences from before the bill was created (except one-time bills,
   // which may intentionally be backdated).
   const anchor = startOfDay(startOfMonth(parseISO(bill.createdAt)));
-  return dates
-    .filter((d) => bill.recurrence === 'one-time' || !isBefore(d, anchor))
+  return dates.filter((d) => bill.recurrence === 'one-time' || !isBefore(d, anchor));
+}
+
+/** Computes all due dates for a bill from its anchor date through the horizon. */
+export function computeDueDates(bill: Bill, now: Date = new Date()): string[] {
+  const horizon = endOfMonth(addMonths(now, HORIZON_MONTHS));
+  return computeDueDatesUntil(bill, horizon).map((d) => toDateKey(d));
+}
+
+/** Computes due dates for a bill that fall within the given inclusive range. */
+export function computeDueDatesInRange(bill: Bill, range: DateRange): string[] {
+  return computeDueDatesUntil(bill, range.end)
+    .filter((d) => isWithinInterval(d, { start: range.start, end: range.end }))
     .map((d) => toDateKey(d));
 }
 
@@ -99,6 +108,43 @@ export async function generateAllOccurrences(now: Date = new Date()): Promise<vo
   for (const bill of bills) {
     await generateOccurrencesForBill(bill, now);
   }
+}
+
+export async function generateOccurrencesForBillUntil(bill: Bill, until: Date): Promise<number> {
+  if (!bill.active) return 0;
+  let created = 0;
+  const dueDates = computeDueDatesUntil(bill, until).map((d) => toDateKey(d));
+  for (const dueDate of dueDates) {
+    const exists = await occurrenceExists(bill.id, dueDate);
+    if (exists) continue;
+    const occurrence = await insertOccurrence({
+      billId: bill.id,
+      dueDate,
+      amountSnapshot: bill.amount,
+      paid: false,
+      autopaid: false,
+    });
+    created += 1;
+    if (bill.reminderEnabled) {
+      const notificationId = await scheduleBillReminder(bill, occurrence);
+      if (notificationId) {
+        await updateOccurrence({ ...occurrence, notificationId });
+      }
+    }
+  }
+  return created;
+}
+
+export async function generateAllOccurrencesUntil(
+  now: Date = new Date(),
+  until: Date = endOfYear(now)
+): Promise<number> {
+  const bills = await getBills();
+  let created = 0;
+  for (const bill of bills) {
+    created += await generateOccurrencesForBillUntil(bill, until);
+  }
+  return created;
 }
 
 /**

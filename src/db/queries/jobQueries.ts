@@ -1,8 +1,11 @@
 import { getDatabase } from '@/db/database';
 import { generateId } from '@/lib/ids';
-import type { Job, PayPeriod } from '@/lib/types';
+import type { Job, PayPeriod, SalaryPeriod } from '@/lib/types';
 
 const DEFAULT_JOB_PAY = {
+  isSalaried: false,
+  salaryAmount: 0,
+  salaryPeriod: 'monthly' as SalaryPeriod,
   hourlyRate: 15,
   overtimeEnabled: true,
   overtimeMultiplier: 1.5,
@@ -14,6 +17,7 @@ const DEFAULT_JOB_PAY = {
   holidayPayInOvertime: false,
   allowPTOInOvertime: false,
   payPeriod: 'weekly' as PayPeriod,
+  workDaysPerWeek: 5,
   currency: 'USD' as const,
 };
 
@@ -21,6 +25,9 @@ type JobRow = {
   id: string;
   name: string;
   is_default: number;
+  is_salaried: number;
+  salary_amount: number;
+  salary_period: string;
   hourly_rate: number;
   overtime_enabled: number;
   overtime_multiplier: number;
@@ -32,6 +39,7 @@ type JobRow = {
   holiday_pay_in_overtime: number;
   allow_pto_in_overtime: number;
   pay_period: string;
+  work_days_per_week: number;
   currency: string;
   created_at: string;
   updated_at: string;
@@ -42,6 +50,9 @@ function rowToJob(row: JobRow): Job {
     id: row.id,
     name: row.name,
     isDefault: row.is_default === 1,
+    isSalaried: row.is_salaried === 1,
+    salaryAmount: row.salary_amount,
+    salaryPeriod: row.salary_period as SalaryPeriod,
     hourlyRate: row.hourly_rate,
     overtimeEnabled: row.overtime_enabled === 1,
     overtimeMultiplier: row.overtime_multiplier,
@@ -53,6 +64,7 @@ function rowToJob(row: JobRow): Job {
     holidayPayInOvertime: row.holiday_pay_in_overtime === 1,
     allowPTOInOvertime: row.allow_pto_in_overtime === 1,
     payPeriod: row.pay_period as PayPeriod,
+    workDaysPerWeek: row.work_days_per_week,
     currency: 'USD',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -90,14 +102,18 @@ export async function insertJob(
   };
   await db.runAsync(
     `INSERT INTO jobs (
-      id, name, is_default, hourly_rate, overtime_enabled, overtime_multiplier,
-      overtime_threshold_hours, tax_percent, default_lunch_minutes, default_break_minutes,
-      break_paid_by_default, holiday_pay_in_overtime, allow_pto_in_overtime, pay_period,
+      id, name, is_default, is_salaried, salary_amount, salary_period, hourly_rate,
+      overtime_enabled, overtime_multiplier, overtime_threshold_hours, tax_percent,
+      default_lunch_minutes, default_break_minutes, break_paid_by_default,
+      holiday_pay_in_overtime, allow_pto_in_overtime, pay_period, work_days_per_week,
       currency, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     full.id,
     full.name,
     full.isDefault ? 1 : 0,
+    full.isSalaried ? 1 : 0,
+    full.salaryAmount,
+    full.salaryPeriod,
     full.hourlyRate,
     full.overtimeEnabled ? 1 : 0,
     full.overtimeMultiplier,
@@ -109,6 +125,7 @@ export async function insertJob(
     full.holidayPayInOvertime ? 1 : 0,
     full.allowPTOInOvertime ? 1 : 0,
     full.payPeriod,
+    full.workDaysPerWeek,
     full.currency,
     full.createdAt,
     full.updatedAt
@@ -121,13 +138,17 @@ export async function updateJob(job: Job): Promise<Job> {
   const updated: Job = { ...job, updatedAt: new Date().toISOString() };
   await db.runAsync(
     `UPDATE jobs SET
-      name = ?, is_default = ?, hourly_rate = ?, overtime_enabled = ?, overtime_multiplier = ?,
-      overtime_threshold_hours = ?, tax_percent = ?, default_lunch_minutes = ?, default_break_minutes = ?,
-      break_paid_by_default = ?, holiday_pay_in_overtime = ?, allow_pto_in_overtime = ?, pay_period = ?,
-      currency = ?, updated_at = ?
+      name = ?, is_default = ?, is_salaried = ?, salary_amount = ?, salary_period = ?,
+      hourly_rate = ?, overtime_enabled = ?, overtime_multiplier = ?, overtime_threshold_hours = ?,
+      tax_percent = ?, default_lunch_minutes = ?, default_break_minutes = ?,
+      break_paid_by_default = ?, holiday_pay_in_overtime = ?, allow_pto_in_overtime = ?,
+      pay_period = ?, work_days_per_week = ?, currency = ?, updated_at = ?
     WHERE id = ?`,
     updated.name,
     updated.isDefault ? 1 : 0,
+    updated.isSalaried ? 1 : 0,
+    updated.salaryAmount,
+    updated.salaryPeriod,
     updated.hourlyRate,
     updated.overtimeEnabled ? 1 : 0,
     updated.overtimeMultiplier,
@@ -139,6 +160,7 @@ export async function updateJob(job: Job): Promise<Job> {
     updated.holidayPayInOvertime ? 1 : 0,
     updated.allowPTOInOvertime ? 1 : 0,
     updated.payPeriod,
+    updated.workDaysPerWeek,
     updated.currency,
     updated.updatedAt,
     updated.id

@@ -16,6 +16,8 @@ type BillMonthListProps = {
   onTogglePaid: (occurrence: BillOccurrenceWithBill) => void;
   onEdit: (occurrence: BillOccurrenceWithBill) => void;
   onDelete: (occurrence: BillOccurrenceWithBill) => void;
+  sortOrder?: 'asc' | 'desc';
+  groupBy?: 'dueDate' | 'paidAt';
 };
 
 function monthKey(iso: string): string {
@@ -26,29 +28,43 @@ function monthLabel(iso: string): string {
   return format(parseISO(iso), 'MMMM yyyy');
 }
 
+function groupKey(occ: BillOccurrenceWithBill, groupBy: 'dueDate' | 'paidAt'): string {
+  const iso = groupBy === 'paidAt' ? (occ.paidAt ?? occ.dueDate) : occ.dueDate;
+  return monthKey(iso);
+}
+
+function groupLabel(occ: BillOccurrenceWithBill, groupBy: 'dueDate' | 'paidAt'): string {
+  const iso = groupBy === 'paidAt' ? (occ.paidAt ?? occ.dueDate) : occ.dueDate;
+  return monthLabel(iso);
+}
+
 export function BillMonthList({
   occurrences,
   onTogglePaid,
   onEdit,
   onDelete,
+  sortOrder = 'desc',
+  groupBy = 'dueDate',
 }: BillMonthListProps) {
   const { colors } = useTheme();
-  const currentMonthKey = format(new Date(), 'yyyy-MM');
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([currentMonthKey]));
 
   const groups = useMemo(() => {
     const map = new Map<string, BillOccurrenceWithBill[]>();
-    const sorted = [...occurrences].sort(
-      (a, b) => parseISO(b.dueDate).getTime() - parseISO(a.dueDate).getTime()
-    );
-    for (const occ of sorted) {
-      const key = monthKey(occ.dueDate);
+    for (const occ of occurrences) {
+      const key = groupKey(occ, groupBy);
       const list = map.get(key) ?? [];
       list.push(occ);
       map.set(key, list);
     }
-    return Array.from(map.entries()).sort((a, b) => (a[0] > b[0] ? -1 : 1));
-  }, [occurrences]);
+    return Array.from(map.entries()).sort((a, b) =>
+      sortOrder === 'asc' ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])
+    );
+  }, [occurrences, groupBy, sortOrder]);
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const firstKey = groups[0]?.[0];
+    return new Set(firstKey ? [firstKey] : []);
+  });
 
   if (groups.length === 0) {
     return null;
@@ -77,7 +93,7 @@ export function BillMonthList({
               style={[styles.header, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
               onPress={() => toggle(key)}>
               <View style={styles.headerLeft}>
-                <Text style={[typography.bodyMedium, { color: colors.text }]}>{monthLabel(items[0].dueDate)}</Text>
+                <Text style={[typography.bodyMedium, { color: colors.text }]}>{groupLabel(items[0], groupBy)}</Text>
                 <Text style={[typography.caption, { color: colors.textSecondary }]}>
                   {items.length} bill{items.length === 1 ? '' : 's'} · {formatCurrency(total)}
                 </Text>
@@ -90,7 +106,11 @@ export function BillMonthList({
             </Pressable>
 
             {isExpanded ? (
-              <View style={styles.items}>
+              <View
+                style={[
+                  styles.items,
+                  { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md },
+                ]}>
                 {items.map((occ) => (
                   <BillCard
                     key={occ.id}

@@ -1,5 +1,5 @@
 import { Plus, ReceiptText } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BillFormModal } from '@/components/bills/BillFormModal';
@@ -9,13 +9,22 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
-import { removeBill, setOccurrencePaid } from '@/features/bills/billService';
+import { Select } from '@/components/ui/Select';
+import { getPaidOccurrenceYears } from '@/db/queries/billQueries';
+import {
+  generateAllOccurrencesUntil,
+  removeBill,
+  setOccurrencePaid,
+} from '@/features/bills/billService';
 import { useBillOccurrences } from '@/features/bills/useBillOccurrences';
+import { usePaidBillsInRange } from '@/features/bills/usePaidBillsInRange';
 import { hapticSuccess, hapticWarning } from '@/lib/haptics';
 import type { Bill, BillOccurrenceWithBill } from '@/lib/types';
+import { useAppStore } from '@/state/appStore';
 import { useTheme } from '@/theme/useTheme';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import { endOfYear, startOfYear } from 'date-fns';
 
 type BillsTab = 'unpaid' | 'paid';
 
@@ -26,16 +35,61 @@ const TABS: { value: BillsTab; label: string }[] = [
 
 export default function BillsScreen() {
   const { colors } = useTheme();
-  const { occurrences } = useBillOccurrences();
+  const { occurrences } = useBillOccurrences(3, 12);
   const [activeTab, setActiveTab] = useState<BillsTab>('unpaid');
+  const currentYear = new Date().getFullYear();
+  const [paidYear, setPaidYear] = useState<string>(String(currentYear));
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+
+  const billsVersion = useAppStore((s) => s.billsVersion);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [created, years] = await Promise.all([
+        generateAllOccurrencesUntil(),
+        getPaidOccurrenceYears(),
+      ]);
+      if (!cancelled) {
+        const sortedYears = years.sort((a, b) => b - a);
+        setAvailableYears(sortedYears);
+        if (sortedYears.length > 0 && !sortedYears.includes(Number(paidYear))) {
+          setPaidYear(String(sortedYears[0]));
+        }
+        if (created > 0) {
+          useAppStore.getState().bumpBills();
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [billsVersion, paidYear]);
+
   const [formVisible, setFormVisible] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
   const [deleting, setDeleting] = useState<BillOccurrenceWithBill | null>(null);
 
-  const filtered = useMemo(
-    () => occurrences.filter((o) => (activeTab === 'paid' ? o.paid : !o.paid)),
-    [occurrences, activeTab]
-  );
+  const paidRange = useMemo(() => {
+    const year = Number(paidYear);
+    return {
+      start: startOfYear(new Date(year, 0, 1)),
+      end: endOfYear(new Date(year, 0, 1)),
+    };
+  }, [paidYear]);
+  const { occurrences: paidOccurrences } = usePaidBillsInRange(paidRange);
+
+  const currentYearKey = String(currentYear);
+  const filtered = useMemo(() => {
+    if (activeTab === 'unpaid') {
+      return occurrences.filter((o) => {
+        if (o.paid) return false;
+        const year = o.dueDate.slice(0, 4);
+        return year === currentYearKey;
+      });
+    }
+    return paidOccurrences;
+  }, [occurrences, activeTab, paidOccurrences, currentYearKey]);
 
   async function togglePaid(occurrence: BillOccurrenceWithBill) {
     await setOccurrencePaid(occurrence, !occurrence.paid);
@@ -88,6 +142,15 @@ export default function BillsScreen() {
         })}
       </View>
 
+      {activeTab === 'paid' && availableYears.length > 0 && (
+        <Select
+          label="Year"
+          value={paidYear}
+          options={availableYears.map((y) => ({ label: String(y), value: String(y) }))}
+          onChange={setPaidYear}
+        />
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState
           icon={<ReceiptText size={32} color={colors.textMuted} />}
@@ -105,7 +168,10 @@ export default function BillsScreen() {
         />
       ) : (
         <BillMonthList
+          key={activeTab}
           occurrences={filtered}
+          sortOrder={activeTab === 'unpaid' ? 'asc' : 'desc'}
+          groupBy={activeTab === 'paid' ? 'paidAt' : 'dueDate'}
           onTogglePaid={togglePaid}
           onEdit={(o) => {
             setEditingBill(o.bill);

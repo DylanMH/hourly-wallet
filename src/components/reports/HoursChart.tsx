@@ -2,18 +2,18 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
-import type { DailyHours } from '@/features/reports/reportService';
+import type { ChartBar } from '@/features/reports/reportService';
 import { formatHoursMinutes } from '@/lib/money';
 import { useTheme } from '@/theme/useTheme';
 import { radius, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
-type WeeklyHoursChartProps = {
-  data: DailyHours[];
+type HoursChartProps = {
+  data: ChartBar[];
   title?: string;
 };
 
-export function WeeklyHoursChart({ data, title = 'Hours worked' }: WeeklyHoursChartProps) {
+export function HoursChart({ data, title = 'Hours worked' }: HoursChartProps) {
   const { colors } = useTheme();
   const max = Math.max(60, ...data.map((d) => d.minutes));
   const total = data.reduce((sum, d) => sum + d.minutes, 0);
@@ -29,6 +29,9 @@ export function WeeklyHoursChart({ data, title = 'Hours worked' }: WeeklyHoursCh
       <View style={styles.chart}>
         {data.map((day, index) => (
           <View key={`${day.label}-${index}`} style={styles.barColumn}>
+            <Text style={[styles.barValue, { color: colors.textSecondary }]}>
+              {day.minutes > 0 ? formatHoursMinutes(day.minutes) : ''}
+            </Text>
             <View style={styles.barTrack}>
               <View
                 style={[
@@ -78,5 +81,10 @@ const styles = StyleSheet.create({
   bar: {
     width: '70%',
     borderRadius: radius.sm,
+  },
+  barValue: {
+    fontSize: 9,
+    textAlign: 'center',
+    minHeight: 12,
   },
 });

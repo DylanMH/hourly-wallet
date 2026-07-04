@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: getAppName(),
   slug: 'hourly-wallet',
-  version: '1.0.0',
+  version: '1.6.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: getScheme(),

@@ -1,5 +1,5 @@
 import { Pencil, Trash2 } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
@@ -27,7 +27,13 @@ export function ShiftHistoryList({ shifts, onEdit, jobNameById }: ShiftHistoryLi
   const bumpShifts = useAppStore((s) => s.bumpShifts);
   const [deleting, setDeleting] = useState<Shift | null>(null);
 
-  const completed = shifts.filter((s) => s.clockOut);
+  const completed = useMemo(
+    () =>
+      [...shifts]
+        .filter((s) => s.clockOut)
+        .sort((a, b) => new Date(b.clockIn).getTime() - new Date(a.clockIn).getTime()),
+    [shifts]
+  );
 
   if (completed.length === 0) {
     return (

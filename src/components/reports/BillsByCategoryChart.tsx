@@ -10,15 +10,16 @@ import { typography } from '@/theme/typography';
 
 type BillsByCategoryChartProps = {
   data: { category: string; total: number }[];
+  title?: string;
 };
 
-export function BillsByCategoryChart({ data }: BillsByCategoryChartProps) {
+export function BillsByCategoryChart({ data, title = 'Bills by category' }: BillsByCategoryChartProps) {
   const { colors } = useTheme();
   const max = Math.max(1, ...data.map((d) => d.total));
 
   return (
     <Card>
-      <Text style={[typography.heading, { color: colors.text }]}>Bills by category</Text>
+      <Text style={[typography.heading, { color: colors.text }]}>{title}</Text>
       {data.length === 0 ? (
         <Text style={[typography.caption, { color: colors.textMuted }]}>
           No bills in this period.

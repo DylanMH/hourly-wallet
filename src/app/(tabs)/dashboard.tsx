@@ -20,6 +20,7 @@ import {
 } from '@/lib/calculations/affordability';
 import { getBillsDueThisMonth, sumOccurrences } from '@/lib/calculations/bills';
 import { calculateWeeklyPay } from '@/lib/calculations/pay';
+import { calculateWeeklyPayForSalary } from '@/lib/calculations/salary';
 import { calculateWorkedMinutes } from '@/lib/calculations/shifts';
 import type { Job } from '@/lib/types';
 import { getCurrentMonthRange, getCurrentWeekRange } from '@/lib/dates';
@@ -66,8 +67,19 @@ export default function DashboardScreen() {
     };
   }, [jobsVersion]);
 
+  const activeJob = useMemo(
+    () => (shift ? jobs.find((j) => j.id === shift.jobId) : undefined),
+    [jobs, shift]
+  );
+  const activeHourly = active && !activeJob?.isSalaried;
+
   const jobLabel =
     selectedJobId === ALL_JOBS ? 'All jobs' : jobs.find((j) => j.id === selectedJobId)?.name;
+
+  const selectedJob = useMemo(
+    () => jobs.find((j) => j.id === selectedJobId),
+    [jobs, selectedJobId]
+  );
 
   const weekShifts =
     selectedJobId === ALL_JOBS
@@ -83,8 +95,27 @@ export default function DashboardScreen() {
     .filter((s) => isSameDay(parseISO(s.clockIn), now))
     .reduce((sum, s) => sum + calculateWorkedMinutes(s), 0);
 
-  const weeklyPay = calculateWeeklyPay(weekShifts);
-  const projection = projectMonthlyIncome(monthShifts);
+  const weeklyPay = useMemo(() => {
+    if (selectedJob?.isSalaried) {
+      return calculateWeeklyPayForSalary(selectedJob);
+    }
+    const base = calculateWeeklyPay(weekShifts);
+    if (selectedJobId === ALL_JOBS) {
+      for (const job of jobs) {
+        if (job.isSalaried) {
+          const salary = calculateWeeklyPayForSalary(job);
+          base.totalHours += salary.totalHours;
+          base.regularHours += salary.regularHours;
+          base.grossPay += salary.grossPay;
+          base.estimatedTaxes += salary.estimatedTaxes;
+          base.estimatedNetPay += salary.estimatedNetPay;
+        }
+      }
+    }
+    return base;
+  }, [weekShifts, jobs, selectedJob, selectedJobId]);
+
+  const projection = projectMonthlyIncome(monthShifts, jobs, selectedJobId);
 
   const totalBillsDue = sumOccurrences(getBillsDueThisMonth(occurrences));
   const affordability = calculateMonthlyAffordability(projection.projectedNet, totalBillsDue);
@@ -99,7 +130,7 @@ export default function DashboardScreen() {
       title="Hourly Wallet"
       showLogo
       right={
-        active ? (
+        activeHourly ? (
           <Pressable
             onPress={() => router.navigate('/(tabs)/clock')}
             style={styles.activeIndicator}
@@ -118,7 +149,7 @@ export default function DashboardScreen() {
         onChange={setSelectedJobId}
       />
 
-      {!active && selectedJobId !== ALL_JOBS ? (
+      {!active && selectedJobId !== ALL_JOBS && !selectedJob?.isSalaried ? (
         <ActiveShiftCard
           shift={shift}
           status={status}

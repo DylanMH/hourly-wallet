@@ -1,9 +1,13 @@
 export type PayPeriod = 'weekly' | 'biweekly' | 'semi-monthly' | 'monthly';
+export type SalaryPeriod = 'monthly' | 'yearly';
 
 export type Job = {
   id: string;
   name: string;
   isDefault: boolean;
+  isSalaried: boolean;
+  salaryAmount: number;
+  salaryPeriod: SalaryPeriod;
   hourlyRate: number;
   overtimeEnabled: boolean;
   overtimeMultiplier: number;
@@ -15,6 +19,7 @@ export type Job = {
   holidayPayInOvertime: boolean;
   allowPTOInOvertime: boolean;
   payPeriod: PayPeriod;
+  workDaysPerWeek: number;
   currency: 'USD';
   createdAt: string;
   updatedAt: string;

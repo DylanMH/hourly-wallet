@@ -1,6 +1,8 @@
+import DatePicker from '@expo/ui/community/datetime-picker';
 import { format, isValid, parse } from 'date-fns';
+import { Calendar } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -51,8 +53,13 @@ function BillForm({ bill, onClose }: { bill: Bill | null; onClose: () => void })
   const [notes, setNotes] = useState(bill?.notes ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
   const usesDueDay = recurrence === 'monthly';
+
+  const dueDateDisplay = isValid(parse(dueDate, 'yyyy-MM-dd', new Date()))
+    ? format(parse(dueDate, 'yyyy-MM-dd', new Date()), 'EEE, MMM d, yyyy')
+    : 'Pick a date';
 
   async function handleReminderToggle(enabled: boolean) {
     if (enabled) {
@@ -165,12 +172,21 @@ function BillForm({ bill, onClose }: { bill: Bill | null; onClose: () => void })
                 placeholder="1"
               />
             ) : (
-              <Input
-                label={recurrence === 'one-time' ? 'Due date (YYYY-MM-DD)' : 'First due date (YYYY-MM-DD)'}
-                value={dueDate}
-                onChangeText={setDueDate}
-                placeholder="2026-07-15"
-              />
+              <Pressable onPress={() => setDatePickerOpen(true)}>
+                <View style={styles.dateField} pointerEvents="none">
+                  <Text style={[typography.captionMedium, { color: colors.textSecondary }]}>
+                    {recurrence === 'one-time' ? 'Due date' : 'First due date'}
+                  </Text>
+                  <View
+                    style={[
+                      styles.dateValue,
+                      { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                    ]}>
+                    <Text style={[typography.body, { color: colors.text }]}>{dueDateDisplay}</Text>
+                    <Calendar size={18} color={colors.textMuted} />
+                  </View>
+                </View>
+              </Pressable>
             )}
             <View style={styles.switchRow}>
               <Text style={[typography.bodyMedium, { color: colors.text }]}>Autopay</Text>
@@ -196,6 +212,24 @@ function BillForm({ bill, onClose }: { bill: Bill | null; onClose: () => void })
             <Button label={bill ? 'Save Changes' : 'Add Bill'} size="lg" loading={saving} onPress={save} />
             <Button label="Cancel" variant="ghost" onPress={onClose} />
         </ScrollView>
+
+        {datePickerOpen ? (
+          <DatePicker
+            value={parse(dueDate, 'yyyy-MM-dd', new Date())}
+            mode="date"
+            presentation="dialog"
+            onValueChange={(_event: unknown, selected?: Date) => {
+              setDatePickerOpen(false);
+              if (selected) {
+                const y = selected.getUTCFullYear();
+                const m = String(selected.getUTCMonth() + 1).padStart(2, '0');
+                const d = String(selected.getUTCDate()).padStart(2, '0');
+                setDueDate(`${y}-${m}-${d}`);
+              }
+            }}
+            onDismiss={() => setDatePickerOpen(false)}
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -220,5 +254,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  dateField: {
+    gap: spacing.xs,
+  },
+  dateValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
 });

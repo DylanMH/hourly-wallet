@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { CREATE_TABLES_V1 } from '@/db/schema';
 
-export const DATABASE_VERSION = 4;
+export const DATABASE_VERSION = 5;
 
 async function tableExists(db: SQLiteDatabase, name: string): Promise<boolean> {
   const row = await db.getFirstAsync<{ name: string }>(
@@ -118,6 +118,22 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
     }
     await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_shifts_job_id ON shifts(job_id);`);
     currentVersion = 4;
+  }
+
+  if (currentVersion === 4) {
+    if (!(await columnExists(db, 'jobs', 'is_salaried'))) {
+      await db.execAsync(`ALTER TABLE jobs ADD COLUMN is_salaried INTEGER NOT NULL DEFAULT 0;`);
+    }
+    if (!(await columnExists(db, 'jobs', 'salary_amount'))) {
+      await db.execAsync(`ALTER TABLE jobs ADD COLUMN salary_amount REAL NOT NULL DEFAULT 0;`);
+    }
+    if (!(await columnExists(db, 'jobs', 'salary_period'))) {
+      await db.execAsync(`ALTER TABLE jobs ADD COLUMN salary_period TEXT NOT NULL DEFAULT 'monthly';`);
+    }
+    if (!(await columnExists(db, 'jobs', 'work_days_per_week'))) {
+      await db.execAsync(`ALTER TABLE jobs ADD COLUMN work_days_per_week INTEGER NOT NULL DEFAULT 5;`);
+    }
+    currentVersion = 5;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

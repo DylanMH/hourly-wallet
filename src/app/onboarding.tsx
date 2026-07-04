@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Wallet } from 'lucide-react-native';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
@@ -15,7 +15,7 @@ import {
 } from '@/features/settings/settingsService';
 import { getDefaultJob, updateJob } from '@/db/queries/jobQueries';
 import { hapticSuccess } from '@/lib/haptics';
-import { BILL_CATEGORIES, BillCategory, PayPeriod } from '@/lib/types';
+import { BILL_CATEGORIES, BillCategory, PayPeriod, SalaryPeriod } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
 import { useTheme } from '@/theme/useTheme';
 import { spacing } from '@/theme/spacing';
@@ -28,6 +28,11 @@ const PAY_PERIODS: { label: string; value: PayPeriod }[] = [
   { label: 'Monthly', value: 'monthly' },
 ];
 
+const SALARY_PERIODS: { label: string; value: SalaryPeriod }[] = [
+  { label: 'Monthly', value: 'monthly' },
+  { label: 'Yearly', value: 'yearly' },
+];
+
 export default function OnboardingScreen() {
   const { colors } = useTheme();
   const bumpJobs = useAppStore((s) => s.bumpJobs);
@@ -35,19 +40,33 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
 
   const [jobName, setJobName] = useState('');
+  const [isSalaried, setIsSalaried] = useState(false);
+  const [salaryAmount, setSalaryAmount] = useState('');
+  const [salaryPeriod, setSalaryPeriod] = useState<SalaryPeriod>('monthly');
   const [hourlyRate, setHourlyRate] = useState('15');
   const [taxPercent, setTaxPercent] = useState('20');
   const [payPeriod, setPayPeriod] = useState<PayPeriod>('weekly');
   const [overtimeEnabled, setOvertimeEnabled] = useState(true);
   const [overtimeMultiplier, setOvertimeMultiplier] = useState('1.5');
   const [overtimeThreshold, setOvertimeThreshold] = useState('40');
+  const [workDaysPerWeek, setWorkDaysPerWeek] = useState('5');
 
   const [billName, setBillName] = useState('');
   const [billAmount, setBillAmount] = useState('');
   const [billCategory, setBillCategory] = useState<BillCategory>('Mortgage / Rent');
   const [billDueDay, setBillDueDay] = useState('1');
 
-  const jobStepValid = jobName.trim().length > 0 && parseFloat(hourlyRate) > 0;
+  const salaryValue = parseFloat(salaryAmount) || 0;
+  const hourlyValue = parseFloat(hourlyRate) || 0;
+  const jobStepValid =
+    jobName.trim().length > 0 && (isSalaried ? salaryValue > 0 : hourlyValue > 0);
+
+  const derivedHourlyRate = useMemo(() => {
+    if (!isSalaried) return hourlyValue;
+    const annual = salaryPeriod === 'yearly' ? salaryValue : salaryValue * 12;
+    const days = Math.min(7, Math.max(1, parseInt(workDaysPerWeek, 10) || 5));
+    return annual / (days * 8 * 52);
+  }, [isSalaried, salaryValue, salaryPeriod, hourlyValue, workDaysPerWeek]);
 
   async function finish(withBill: boolean) {
     if (saving || !jobStepValid) return;
@@ -57,15 +76,20 @@ export default function OnboardingScreen() {
       if (!job) {
         throw new Error('No default job found. Please restart the app.');
       }
+      const daysPerWeek = Math.min(7, Math.max(1, parseInt(workDaysPerWeek, 10) || 5));
       const updatedJob = {
         ...job,
         name: jobName.trim(),
-        hourlyRate: parseFloat(hourlyRate) || 15,
+        isSalaried,
+        salaryAmount: isSalaried ? salaryValue : 0,
+        salaryPeriod,
+        hourlyRate: isSalaried ? derivedHourlyRate : parseFloat(hourlyRate) || 15,
         taxPercent: parseFloat(taxPercent) || 20,
         payPeriod,
-        overtimeEnabled,
+        overtimeEnabled: isSalaried ? false : overtimeEnabled,
         overtimeMultiplier: parseFloat(overtimeMultiplier) || 1.5,
         overtimeThresholdHours: parseFloat(overtimeThreshold) || 40,
+        workDaysPerWeek: daysPerWeek,
       };
       await updateJob(updatedJob);
       bumpJobs();
@@ -122,13 +146,43 @@ export default function OnboardingScreen() {
             onChangeText={setJobName}
             placeholder="Barista, Delivery, etc."
           />
+          <View style={styles.switchRow}>
+            <Text style={[typography.bodyMedium, { color: colors.text }]}>Salaried job</Text>
+            <Switch value={isSalaried} onValueChange={setIsSalaried} />
+          </View>
+          {isSalaried ? (
+            <>
+              <Input
+                label="Salary amount"
+                prefix="$"
+                value={salaryAmount}
+                onChangeText={setSalaryAmount}
+                keyboardType="decimal-pad"
+                placeholder="50000.00"
+              />
+              <Select
+                label="Salary period"
+                value={salaryPeriod}
+                onChange={(v) => setSalaryPeriod(v as SalaryPeriod)}
+                options={SALARY_PERIODS}
+              />
+            </>
+          ) : (
+            <Input
+              label="Hourly rate"
+              prefix="$"
+              value={hourlyRate}
+              onChangeText={setHourlyRate}
+              keyboardType="decimal-pad"
+              placeholder="15.00"
+            />
+          )}
           <Input
-            label="Hourly rate"
-            prefix="$"
-            value={hourlyRate}
-            onChangeText={setHourlyRate}
-            keyboardType="decimal-pad"
-            placeholder="15.00"
+            label="Work days per week (1–7)"
+            value={workDaysPerWeek}
+            onChangeText={setWorkDaysPerWeek}
+            keyboardType="number-pad"
+            placeholder="5"
           />
           <Input
             label="Estimated tax withholding (%)"
@@ -143,11 +197,13 @@ export default function OnboardingScreen() {
             onChange={setPayPeriod}
             options={PAY_PERIODS}
           />
-          <View style={styles.switchRow}>
-            <Text style={[typography.bodyMedium, { color: colors.text }]}>Overtime enabled</Text>
-            <Switch value={overtimeEnabled} onValueChange={setOvertimeEnabled} />
-          </View>
-          {overtimeEnabled ? (
+          {!isSalaried ? (
+            <View style={styles.switchRow}>
+              <Text style={[typography.bodyMedium, { color: colors.text }]}>Overtime enabled</Text>
+              <Switch value={overtimeEnabled} onValueChange={setOvertimeEnabled} />
+            </View>
+          ) : null}
+          {overtimeEnabled && !isSalaried ? (
             <>
               <Input
                 label="Overtime multiplier (e.g. 1.5)"

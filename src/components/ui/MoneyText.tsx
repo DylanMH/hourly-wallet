@@ -10,9 +10,16 @@ type MoneyTextProps = {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   tone?: 'default' | 'positive' | 'warning' | 'danger' | 'muted';
   style?: TextStyle;
+  numberOfLines?: number;
 };
 
-export function MoneyText({ amount, size = 'md', tone = 'default', style }: MoneyTextProps) {
+export function MoneyText({
+  amount,
+  size = 'md',
+  tone = 'default',
+  style,
+  numberOfLines,
+}: MoneyTextProps) {
   const { colors } = useTheme();
 
   const toneColor = {
@@ -31,7 +38,9 @@ export function MoneyText({ amount, size = 'md', tone = 'default', style }: Mone
   }[size];
 
   return (
-    <Text style={[sizeStyle, { color: toneColor, fontVariant: ['tabular-nums'] }, style]}>
+    <Text
+      style={[sizeStyle, { color: toneColor, fontVariant: ['tabular-nums'] }, style]}
+      numberOfLines={numberOfLines}>
       {formatCurrency(amount)}
     </Text>
   );

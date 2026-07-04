@@ -7,7 +7,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { getDefaultJob, getJobs } from '@/db/queries/jobQueries';
+import { getJobs } from '@/db/queries/jobQueries';
 import { insertShift, updateShift } from '@/db/queries/shiftQueries';
 import { hapticSuccess } from '@/lib/haptics';
 import type { Job, Shift } from '@/lib/types';
@@ -42,9 +42,9 @@ function parseDateKey(dateStr: string): Date | null {
 }
 
 function toDateKeyLocal(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
 
@@ -92,10 +92,14 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [all, fallback] = await Promise.all([getJobs(), getDefaultJob()]);
+      const all = await getJobs();
+      const hourly = all.filter((j) => !j.isSalaried);
       if (cancelled) return;
       setJobs(all);
-      setSelectedJobId((prev) => prev ?? fallback?.id ?? all[0]?.id ?? null);
+      setSelectedJobId((prev) => {
+        if (prev && hourly.some((j) => j.id === prev)) return prev;
+        return hourly[0]?.id ?? null;
+      });
     }
     load();
     return () => {
@@ -103,7 +107,8 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
     };
   }, []);
 
-  const selectedJob = jobs.find((j) => j.id === selectedJobId) ?? jobs[0];
+  const hourlyJobs = jobs.filter((j) => !j.isSalaried);
+  const selectedJob = hourlyJobs.find((j) => j.id === selectedJobId) ?? hourlyJobs[0];
 
   const [picker, setPicker] = useState<
     | null
@@ -273,7 +278,7 @@ function ShiftForm({ shift, onClose }: { shift: Shift | null; onClose: () => voi
             <Select
               label="Job"
               value={selectedJob.id}
-              options={jobs.map((j) => ({ label: j.name, value: j.id }))}
+              options={hourlyJobs.map((j) => ({ label: j.name, value: j.id }))}
               onChange={setSelectedJobId}
             />
           ) : null}

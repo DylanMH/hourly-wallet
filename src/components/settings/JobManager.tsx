@@ -15,7 +15,7 @@ import {
   updateJob,
 } from '@/db/queries/jobQueries';
 import { hapticSuccess } from '@/lib/haptics';
-import type { Job, PayPeriod } from '@/lib/types';
+import type { Job, PayPeriod, SalaryPeriod } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
 import { useTheme } from '@/theme/useTheme';
 import { radius, spacing } from '@/theme/spacing';
@@ -28,9 +28,17 @@ const PAY_PERIODS: { label: string; value: PayPeriod }[] = [
   { label: 'Monthly', value: 'monthly' },
 ];
 
+const SALARY_PERIODS: { label: string; value: SalaryPeriod }[] = [
+  { label: 'Monthly', value: 'monthly' },
+  { label: 'Yearly', value: 'yearly' },
+];
+
 const emptyJob = (): Omit<Job, 'id' | 'createdAt' | 'updatedAt'> => ({
   name: '',
   isDefault: false,
+  isSalaried: false,
+  salaryAmount: 0,
+  salaryPeriod: 'monthly',
   hourlyRate: 15,
   overtimeEnabled: true,
   overtimeMultiplier: 1.5,
@@ -42,6 +50,7 @@ const emptyJob = (): Omit<Job, 'id' | 'createdAt' | 'updatedAt'> => ({
   holidayPayInOvertime: false,
   allowPTOInOvertime: false,
   payPeriod: 'weekly',
+  workDaysPerWeek: 5,
   currency: 'USD',
 });
 
@@ -193,6 +202,9 @@ type JobEditorProps = {
 function JobEditor({ job, onSave, onCancel, loading }: JobEditorProps) {
   const { colors } = useTheme();
   const [name, setName] = useState(job.name || '');
+  const [isSalaried, setIsSalaried] = useState(job.isSalaried);
+  const [salaryAmount, setSalaryAmount] = useState(String(job.salaryAmount));
+  const [salaryPeriod, setSalaryPeriod] = useState<SalaryPeriod>(job.salaryPeriod);
   const [hourlyRate, setHourlyRate] = useState(String(job.hourlyRate));
   const [taxPercent, setTaxPercent] = useState(String(job.taxPercent));
   const [overtimeEnabled, setOvertimeEnabled] = useState(job.overtimeEnabled);
@@ -204,6 +216,7 @@ function JobEditor({ job, onSave, onCancel, loading }: JobEditorProps) {
   const [holidayPayInOvertime, setHolidayPayInOvertime] = useState(job.holidayPayInOvertime);
   const [allowPTOInOvertime, setAllowPTOInOvertime] = useState(job.allowPTOInOvertime);
   const [payPeriod, setPayPeriod] = useState<PayPeriod>(job.payPeriod);
+  const [workDaysPerWeek, setWorkDaysPerWeek] = useState(String(job.workDaysPerWeek));
   const [isDefault, setIsDefault] = useState(job.isDefault);
   const [error, setError] = useState('');
 
@@ -216,9 +229,12 @@ function JobEditor({ job, onSave, onCancel, loading }: JobEditorProps) {
       ...job,
       name: name.trim(),
       isDefault,
+      isSalaried,
+      salaryAmount: parseFloat(salaryAmount) || 0,
+      salaryPeriod,
       hourlyRate: parseFloat(hourlyRate) || job.hourlyRate,
       taxPercent: parseFloat(taxPercent) || 0,
-      overtimeEnabled,
+      overtimeEnabled: isSalaried ? false : overtimeEnabled,
       overtimeMultiplier: parseFloat(overtimeMultiplier) || 1.5,
       overtimeThresholdHours: parseFloat(overtimeThreshold) || 40,
       defaultLunchMinutes: parseInt(defaultLunch, 10) || 30,
@@ -227,6 +243,7 @@ function JobEditor({ job, onSave, onCancel, loading }: JobEditorProps) {
       holidayPayInOvertime,
       allowPTOInOvertime,
       payPeriod,
+      workDaysPerWeek: Math.min(7, Math.max(1, parseInt(workDaysPerWeek, 10) || 5)),
     });
   }
 
@@ -236,12 +253,40 @@ function JobEditor({ job, onSave, onCancel, loading }: JobEditorProps) {
         {job.id ? 'Edit job' : 'New job'}
       </Text>
       <Input label="Job name" value={name} onChangeText={setName} placeholder="e.g. Barista" />
+      <View style={styles.switchRow}>
+        <Text style={[typography.bodyMedium, { color: colors.text }]}>Salaried job</Text>
+        <Switch value={isSalaried} onValueChange={setIsSalaried} />
+      </View>
+      {isSalaried ? (
+        <>
+          <Input
+            label="Salary amount"
+            prefix="$"
+            value={salaryAmount}
+            onChangeText={setSalaryAmount}
+            keyboardType="decimal-pad"
+          />
+          <Select
+            label="Salary period"
+            value={salaryPeriod}
+            onChange={(v) => setSalaryPeriod(v as SalaryPeriod)}
+            options={SALARY_PERIODS}
+          />
+        </>
+      ) : (
+        <Input
+          label="Hourly rate"
+          prefix="$"
+          value={hourlyRate}
+          onChangeText={setHourlyRate}
+          keyboardType="decimal-pad"
+        />
+      )}
       <Input
-        label="Hourly rate"
-        prefix="$"
-        value={hourlyRate}
-        onChangeText={setHourlyRate}
-        keyboardType="decimal-pad"
+        label="Work days per week (1–7)"
+        value={workDaysPerWeek}
+        onChangeText={setWorkDaysPerWeek}
+        keyboardType="number-pad"
       />
       <Input
         label="Estimated tax withholding (%)"
@@ -249,11 +294,13 @@ function JobEditor({ job, onSave, onCancel, loading }: JobEditorProps) {
         onChangeText={setTaxPercent}
         keyboardType="decimal-pad"
       />
-      <View style={styles.switchRow}>
-        <Text style={[typography.bodyMedium, { color: colors.text }]}>Overtime enabled</Text>
-        <Switch value={overtimeEnabled} onValueChange={setOvertimeEnabled} />
-      </View>
-      {overtimeEnabled ? (
+      {!isSalaried ? (
+        <View style={styles.switchRow}>
+          <Text style={[typography.bodyMedium, { color: colors.text }]}>Overtime enabled</Text>
+          <Switch value={overtimeEnabled} onValueChange={setOvertimeEnabled} />
+        </View>
+      ) : null}
+      {overtimeEnabled && !isSalaried ? (
         <>
           <Select
             label="Overtime multiplier"

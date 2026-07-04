@@ -1,16 +1,12 @@
-import { addMonths, endOfMonth, startOfMonth, subMonths } from 'date-fns';
 import { useEffect, useState } from 'react';
 
-import { getOccurrencesBetween } from '@/db/queries/billQueries';
+import { getPaidOccurrencesInRange } from '@/db/queries/billQueries';
+import type { DateRange } from '@/lib/dates';
 import { toDateKey } from '@/lib/dates';
 import type { BillOccurrenceWithBill } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
 
-/**
- * Loads bill occurrences from a few months back through the generation
- * horizon so overdue, current, and upcoming bills are all available.
- */
-export function useBillOccurrences(monthsBack = 3, monthsAhead = 2): {
+export function usePaidBillsInRange(range: DateRange): {
   occurrences: BillOccurrenceWithBill[];
   loading: boolean;
 } {
@@ -22,10 +18,12 @@ export function useBillOccurrences(monthsBack = 3, monthsAhead = 2): {
   useEffect(() => {
     if (!hydrated) return;
     let cancelled = false;
-    const now = new Date();
-    const start = toDateKey(startOfMonth(subMonths(now, monthsBack)));
-    const end = toDateKey(endOfMonth(addMonths(now, monthsAhead)));
-    getOccurrencesBetween(start, end).then((result) => {
+    getPaidOccurrencesInRange(
+      range.start.toISOString(),
+      range.end.toISOString(),
+      toDateKey(range.start),
+      toDateKey(range.end)
+    ).then((result) => {
       if (!cancelled) {
         setOccurrences(result);
         setLoading(false);
@@ -34,7 +32,7 @@ export function useBillOccurrences(monthsBack = 3, monthsAhead = 2): {
     return () => {
       cancelled = true;
     };
-  }, [billsVersion, hydrated, monthsBack, monthsAhead]);
+  }, [billsVersion, hydrated, range.start, range.end]);
 
   return { occurrences, loading };
 }
