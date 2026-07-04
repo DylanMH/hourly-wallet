@@ -44,6 +44,6 @@ example
 
 # custom
 /AI-MDs
-*.claude
-*.vscode
+.claude/
+.vscode/
 .gitignore
