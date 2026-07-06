@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { CREATE_TABLES_V1 } from '@/db/schema';
 
-export const DATABASE_VERSION = 5;
+export const DATABASE_VERSION = 6;
 
 async function tableExists(db: SQLiteDatabase, name: string): Promise<boolean> {
   const row = await db.getFirstAsync<{ name: string }>(
@@ -134,6 +134,27 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
       await db.execAsync(`ALTER TABLE jobs ADD COLUMN work_days_per_week INTEGER NOT NULL DEFAULT 5;`);
     }
     currentVersion = 5;
+  }
+
+  if (currentVersion === 5) {
+    // Remove duplicate occurrences (same bill + due date), keeping paid ones
+    // first, then the oldest row.
+    await db.execAsync(`
+      DELETE FROM bill_occurrences
+      WHERE id NOT IN (
+        SELECT id FROM (
+          SELECT id,
+            ROW_NUMBER() OVER (
+              PARTITION BY bill_id, due_date
+              ORDER BY paid DESC, created_at ASC
+            ) AS rn
+          FROM bill_occurrences
+        ) WHERE rn = 1
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_bill_occurrences_unique
+        ON bill_occurrences(bill_id, due_date);
+    `);
+    currentVersion = 6;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

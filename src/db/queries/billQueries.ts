@@ -235,9 +235,13 @@ async function attachBills(rows: OccurrenceRow[]): Promise<BillOccurrenceWithBil
     .map((r) => ({ ...rowToOccurrence(r), bill: billMap.get(r.bill_id)! }));
 }
 
+/**
+ * Inserts an occurrence unless one already exists for the same bill and due
+ * date (enforced by a unique index). Returns null when the insert was skipped.
+ */
 export async function insertOccurrence(
   occ: Omit<BillOccurrence, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
-): Promise<BillOccurrence> {
+): Promise<BillOccurrence | null> {
   const db = getDatabase();
   const now = new Date().toISOString();
   const full: BillOccurrence = {
@@ -246,8 +250,8 @@ export async function insertOccurrence(
     createdAt: now,
     updatedAt: now,
   };
-  await db.runAsync(
-    `INSERT INTO bill_occurrences (
+  const result = await db.runAsync(
+    `INSERT OR IGNORE INTO bill_occurrences (
       id, bill_id, due_date, amount_snapshot, paid, paid_at, autopaid,
       notification_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -262,7 +266,7 @@ export async function insertOccurrence(
     full.createdAt,
     full.updatedAt
   );
-  return full;
+  return result.changes > 0 ? full : null;
 }
 
 export async function updateOccurrence(occ: BillOccurrence): Promise<BillOccurrence> {

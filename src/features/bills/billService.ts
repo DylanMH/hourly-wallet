@@ -2,7 +2,6 @@ import {
   addMonths,
   addWeeks,
   addYears,
-  endOfMonth,
   endOfYear,
   getDaysInMonth,
   isAfter,
@@ -21,7 +20,6 @@ import {
   getOccurrencesForBill,
   insertBill,
   insertOccurrence,
-  occurrenceExists,
   updateBill as updateBillRow,
   updateOccurrence,
 } from '@/db/queries/billQueries';
@@ -29,9 +27,6 @@ import { DateRange, toDateKey } from '@/lib/dates';
 import { cancelBillReminder, scheduleBillReminder } from '@/lib/notifications';
 import type { Bill, BillOccurrence } from '@/lib/types';
 import { useAppStore } from '@/state/appStore';
-
-/** How far ahead occurrences are generated. */
-const HORIZON_MONTHS = 2;
 
 function clampDueDay(base: Date, dueDay: number): Date {
   const day = Math.min(Math.max(1, dueDay), getDaysInMonth(base));
@@ -67,12 +62,6 @@ function computeDueDatesUntil(bill: Bill, until: Date): Date[] {
   return dates.filter((d) => bill.recurrence === 'one-time' || !isBefore(d, anchor));
 }
 
-/** Computes all due dates for a bill from its anchor date through the horizon. */
-export function computeDueDates(bill: Bill, now: Date = new Date()): string[] {
-  const horizon = endOfMonth(addMonths(now, HORIZON_MONTHS));
-  return computeDueDatesUntil(bill, horizon).map((d) => toDateKey(d));
-}
-
 /** Computes due dates for a bill that fall within the given inclusive range. */
 export function computeDueDatesInRange(bill: Bill, range: DateRange): string[] {
   return computeDueDatesUntil(bill, range.end)
@@ -80,43 +69,11 @@ export function computeDueDatesInRange(bill: Bill, range: DateRange): string[] {
     .map((d) => toDateKey(d));
 }
 
-/** Creates any missing occurrences for a bill through the horizon. */
-export async function generateOccurrencesForBill(bill: Bill, now: Date = new Date()): Promise<void> {
-  if (!bill.active) return;
-  const dueDates = computeDueDates(bill, now);
-  for (const dueDate of dueDates) {
-    const exists = await occurrenceExists(bill.id, dueDate);
-    if (exists) continue;
-    const occurrence = await insertOccurrence({
-      billId: bill.id,
-      dueDate,
-      amountSnapshot: bill.amount,
-      paid: false,
-      autopaid: false,
-    });
-    if (bill.reminderEnabled) {
-      const notificationId = await scheduleBillReminder(bill, occurrence);
-      if (notificationId) {
-        await updateOccurrence({ ...occurrence, notificationId });
-      }
-    }
-  }
-}
-
-export async function generateAllOccurrences(now: Date = new Date()): Promise<void> {
-  const bills = await getBills();
-  for (const bill of bills) {
-    await generateOccurrencesForBill(bill, now);
-  }
-}
-
 export async function generateOccurrencesForBillUntil(bill: Bill, until: Date): Promise<number> {
   if (!bill.active) return 0;
   let created = 0;
   const dueDates = computeDueDatesUntil(bill, until).map((d) => toDateKey(d));
   for (const dueDate of dueDates) {
-    const exists = await occurrenceExists(bill.id, dueDate);
-    if (exists) continue;
     const occurrence = await insertOccurrence({
       billId: bill.id,
       dueDate,
@@ -124,6 +81,7 @@ export async function generateOccurrencesForBillUntil(bill: Bill, until: Date): 
       paid: false,
       autopaid: false,
     });
+    if (!occurrence) continue; // already exists
     created += 1;
     if (bill.reminderEnabled) {
       const notificationId = await scheduleBillReminder(bill, occurrence);
@@ -135,16 +93,33 @@ export async function generateOccurrencesForBillUntil(bill: Bill, until: Date): 
   return created;
 }
 
-export async function generateAllOccurrencesUntil(
+/** Creates any missing occurrences for a bill through the end of the year. */
+export async function generateOccurrencesForBill(bill: Bill, now: Date = new Date()): Promise<number> {
+  return generateOccurrencesForBillUntil(bill, endOfYear(now));
+}
+
+// Serializes concurrent generation runs so overlapping triggers (app boot,
+// bills screen, bill creation) cannot race each other.
+let generationLock: Promise<number> = Promise.resolve(0);
+
+export function generateAllOccurrencesUntil(
   now: Date = new Date(),
   until: Date = endOfYear(now)
 ): Promise<number> {
-  const bills = await getBills();
-  let created = 0;
-  for (const bill of bills) {
-    created += await generateOccurrencesForBillUntil(bill, until);
-  }
-  return created;
+  const run = generationLock.then(async () => {
+    const bills = await getBills();
+    let created = 0;
+    for (const bill of bills) {
+      created += await generateOccurrencesForBillUntil(bill, until);
+    }
+    return created;
+  });
+  generationLock = run.catch(() => 0);
+  return run;
+}
+
+export async function generateAllOccurrences(now: Date = new Date()): Promise<void> {
+  await generateAllOccurrencesUntil(now);
 }
 
 /**

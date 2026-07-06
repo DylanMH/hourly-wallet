@@ -112,4 +112,5 @@ CREATE TABLE IF NOT EXISTS bill_occurrences (
 
 CREATE INDEX IF NOT EXISTS idx_bill_occurrences_bill_id ON bill_occurrences(bill_id);
 CREATE INDEX IF NOT EXISTS idx_bill_occurrences_due_date ON bill_occurrences(due_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bill_occurrences_unique ON bill_occurrences(bill_id, due_date);
 `;

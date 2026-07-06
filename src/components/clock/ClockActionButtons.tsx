@@ -1,19 +1,23 @@
-import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import DatePicker from "@expo/ui/community/datetime-picker";
+import { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
 
-import { Button } from '@/components/ui/Button';
-import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { Button } from "@/components/ui/Button";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import {
-  clockIn,
-  clockOut,
-  endBreak,
-  endLunch,
-  startBreak,
-  startLunch,
-} from '@/features/clock/clockService';
-import { hapticImpact, hapticSuccess, hapticWarning } from '@/lib/haptics';
-import type { ClockStatus } from '@/lib/types';
-import { spacing } from '@/theme/spacing';
+    clockIn,
+    clockInAt,
+    clockOut,
+    endBreak,
+    endLunch,
+    startBreak,
+    startLunch,
+} from "@/features/clock/clockService";
+import { hapticImpact, hapticSuccess, hapticWarning } from "@/lib/haptics";
+import type { ClockStatus } from "@/lib/types";
+import { spacing } from "@/theme/spacing";
+import { typography } from "@/theme/typography";
+import { useTheme } from "@/theme/useTheme";
 
 type ClockActionButtonsProps = {
   status: ClockStatus;
@@ -21,9 +25,16 @@ type ClockActionButtonsProps = {
   onChanged: () => void;
 };
 
-export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButtonsProps) {
+export function ClockActionButtons({
+  status,
+  jobId,
+  onChanged,
+}: ClockActionButtonsProps) {
+  const { colors } = useTheme();
   const [busy, setBusy] = useState(false);
   const [confirmAutoClose, setConfirmAutoClose] = useState(false);
+  const [customTimePickerOpen, setCustomTimePickerOpen] = useState(false);
+  const [customTimeError, setCustomTimeError] = useState("");
 
   async function run(action: () => Promise<unknown>, haptic: () => void) {
     if (busy) return;
@@ -33,7 +44,7 @@ export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButt
       haptic();
       onChanged();
     } catch (error) {
-      if (error instanceof Error && error.message === 'END_ACTIVE_FIRST') {
+      if (error instanceof Error && error.message === "END_ACTIVE_FIRST") {
         setConfirmAutoClose(true);
       } else {
         hapticWarning();
@@ -45,17 +56,33 @@ export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButt
 
   const primary = (() => {
     switch (status) {
-      case 'not-clocked-in':
+      case "not-clocked-in":
         return (
-          <Button
-            label="Clock In"
-            size="lg"
-            variant="positive"
-            loading={busy}
-            onPress={() => run(() => clockIn(jobId), hapticSuccess)}
-          />
+          <View style={styles.column}>
+            <Button
+              label="Clock In"
+              size="lg"
+              variant="positive"
+              loading={busy}
+              onPress={() => run(() => clockIn(jobId), hapticSuccess)}
+            />
+            <Button
+              label="Clock In at Custom Time"
+              variant="secondary"
+              loading={busy}
+              onPress={() => {
+                setCustomTimeError("");
+                setCustomTimePickerOpen(true);
+              }}
+            />
+            {customTimeError ? (
+              <Text style={[typography.caption, { color: colors.danger }]}>
+                {customTimeError}
+              </Text>
+            ) : null}
+          </View>
         );
-      case 'on-lunch':
+      case "on-lunch":
         return (
           <Button
             label="End Lunch"
@@ -64,7 +91,7 @@ export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButt
             onPress={() => run(endLunch, hapticImpact)}
           />
         );
-      case 'on-break':
+      case "on-break":
         return (
           <Button
             label="End Break"
@@ -89,7 +116,7 @@ export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButt
   return (
     <View style={styles.container}>
       {primary}
-      {status === 'clocked-in' ? (
+      {status === "clocked-in" ? (
         <View style={styles.secondaryRow}>
           <Button
             label="Start Lunch"
@@ -105,7 +132,7 @@ export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButt
           />
         </View>
       ) : null}
-      {status === 'on-lunch' || status === 'on-break' ? (
+      {status === "on-lunch" || status === "on-break" ? (
         <Button
           label="Clock Out"
           variant="secondary"
@@ -124,6 +151,25 @@ export function ClockActionButtons({ status, jobId, onChanged }: ClockActionButt
         }}
         onCancel={() => setConfirmAutoClose(false)}
       />
+
+      {customTimePickerOpen ? (
+        <DatePicker
+          value={new Date()}
+          mode="time"
+          presentation="dialog"
+          onValueChange={(_event: unknown, selected?: Date) => {
+            setCustomTimePickerOpen(false);
+            if (!selected) return;
+            if (selected > new Date()) {
+              setCustomTimeError("Custom time cannot be in the future.");
+              return;
+            }
+            setCustomTimeError("");
+            run(() => clockInAt(selected, jobId), hapticSuccess);
+          }}
+          onDismiss={() => setCustomTimePickerOpen(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -132,8 +178,11 @@ const styles = StyleSheet.create({
   container: {
     gap: spacing.md,
   },
+  column: {
+    gap: spacing.md,
+  },
   secondaryRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.md,
   },
   secondary: {

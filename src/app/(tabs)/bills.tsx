@@ -46,25 +46,21 @@ export default function BillsScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [created, years] = await Promise.all([
-        generateAllOccurrencesUntil(),
-        getPaidOccurrenceYears(),
-      ]);
-      if (!cancelled) {
-        const sortedYears = years.sort((a, b) => b - a);
-        setAvailableYears(sortedYears);
-        if (sortedYears.length > 0 && !sortedYears.includes(Number(paidYear))) {
-          setPaidYear(String(sortedYears[0]));
-        }
-        if (created > 0) {
-          useAppStore.getState().bumpBills();
-        }
+      const created = await generateAllOccurrencesUntil();
+      const years = await getPaidOccurrenceYears();
+      if (cancelled) return;
+      setAvailableYears(years);
+      setPaidYear((prev) =>
+        years.length > 0 && !years.includes(Number(prev)) ? String(years[0]) : prev
+      );
+      if (created > 0) {
+        useAppStore.getState().bumpBills();
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [billsVersion, paidYear]);
+  }, [billsVersion]);
 
   const [formVisible, setFormVisible] = useState(false);
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
