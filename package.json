@@ -4,6 +4,7 @@
   "version": "1.6.0",
   "dependencies": {
     "@expo/ui": "~57.0.3",
+    "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.6.2",
     "date-fns": "^4.4.0",
     "drizzle-orm": "^0.45.2",
@@ -25,6 +26,7 @@
     "expo-symbols": "~57.0.0",
     "expo-system-ui": "~57.0.0",
     "expo-web-browser": "~57.0.0",
+    "jest-expo": "~57.0.1",
     "lucide-react-native": "^1.23.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -42,6 +44,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.0",
@@ -54,7 +57,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "private": true
 }

@@ -1,0 +1,90 @@
+/// <reference types="jest" />
+
+import {
+    calculateLunchMinutes,
+    calculatePaidBreakMinutes,
+    calculateShiftDuration,
+    calculateUnpaidBreakMinutes,
+    calculateWorkedMinutes,
+} from "../shifts";
+
+import type { Shift } from "@/lib/types";
+
+function makeShift(
+  partial: Partial<Shift> & { clockIn: string; clockOut?: string },
+): Shift {
+  return {
+    id: "shift-1",
+    jobId: "job-1",
+    date: "2026-01-01",
+    clockIn: partial.clockIn,
+    clockOut: partial.clockOut,
+    lunchStart: partial.lunchStart,
+    lunchEnd: partial.lunchEnd,
+    breaks: partial.breaks ?? [],
+    notes: undefined,
+    isHolidayPay: false,
+    isPTO: false,
+    hourlyRateSnapshot: 20,
+    overtimeEnabledSnapshot: false,
+    overtimeMultiplierSnapshot: 1,
+    overtimeThresholdSnapshot: 40,
+    taxPercentSnapshot: 15,
+    holidayPayInOvertimeSnapshot: false,
+    ptoInOvertimeSnapshot: false,
+    createdAt: partial.clockIn,
+    updatedAt: partial.clockIn,
+  };
+}
+
+describe("shift calculations", () => {
+  test("calculates total duration", () => {
+    const shift = makeShift({
+      clockIn: "2026-01-01T09:00:00.000Z",
+      clockOut: "2026-01-01T17:00:00.000Z",
+    });
+    expect(calculateShiftDuration(shift)).toBe(480);
+  });
+
+  test("subtracts lunch from worked minutes", () => {
+    const shift = makeShift({
+      clockIn: "2026-01-01T09:00:00.000Z",
+      clockOut: "2026-01-01T17:00:00.000Z",
+      lunchStart: "2026-01-01T12:00:00.000Z",
+      lunchEnd: "2026-01-01T12:30:00.000Z",
+    });
+    expect(calculateLunchMinutes(shift)).toBe(30);
+    expect(calculateWorkedMinutes(shift)).toBe(450);
+  });
+
+  test("subtracts unpaid breaks but keeps paid breaks", () => {
+    const shift = makeShift({
+      clockIn: "2026-01-01T09:00:00.000Z",
+      clockOut: "2026-01-01T17:00:00.000Z",
+      breaks: [
+        {
+          id: "b1",
+          start: "2026-01-01T14:00:00.000Z",
+          end: "2026-01-01T14:15:00.000Z",
+          paid: true,
+        },
+        {
+          id: "b2",
+          start: "2026-01-01T15:00:00.000Z",
+          end: "2026-01-01T15:15:00.000Z",
+          paid: false,
+        },
+      ],
+    });
+    expect(calculatePaidBreakMinutes(shift)).toBe(15);
+    expect(calculateUnpaidBreakMinutes(shift)).toBe(15);
+    expect(calculateWorkedMinutes(shift)).toBe(465);
+  });
+
+  test("active shift uses asOf time", () => {
+    const clockIn = "2026-01-01T09:00:00.000Z";
+    const asOf = new Date("2026-01-01T12:00:00.000Z");
+    const shift = makeShift({ clockIn });
+    expect(calculateWorkedMinutes(shift, asOf)).toBe(180);
+  });
+});
