@@ -41,6 +41,14 @@ export default function DashboardScreen() {
     [jobs, shift],
   );
   const activeJobName = activeJob?.name;
+  const statusLabel =
+    status === "not-clocked-in"
+      ? "Not clocked in"
+      : status === "clocked-in"
+        ? "Clocked in"
+        : status === "on-lunch"
+          ? "On lunch"
+          : "On break";
 
   const jobOptions = useMemo(
     () => [
@@ -59,6 +67,9 @@ export default function DashboardScreen() {
           onPress={() => router.navigate("/(tabs)/clock")}
           style={styles.activeIndicator}
           hitSlop={8}
+          accessibilityLabel={`${statusLabel}${activeJobName ? ` for ${activeJobName}` : ""}`}
+          accessibilityHint="Opens the clock screen"
+          accessibilityRole="button"
         >
           <View
             style={[
@@ -86,13 +97,7 @@ export default function DashboardScreen() {
               },
             ]}
           >
-            {status === "not-clocked-in"
-              ? "Not clocked in"
-              : status === "clocked-in"
-                ? "Clocked in"
-                : status === "on-lunch"
-                  ? "On lunch"
-                  : "On break"}
+            {statusLabel}
             {activeJobName ? ` · ${activeJobName}` : ""}
           </Text>
         </Pressable>

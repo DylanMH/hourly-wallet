@@ -103,11 +103,21 @@ export function ShiftHistoryList({
               ) : null}
             </View>
             <View style={styles.itemActions}>
-              <Pressable onPress={() => onEdit(shift)} hitSlop={8}>
+              <Pressable
+                onPress={() => onEdit(shift)}
+                hitSlop={8}
+                accessibilityLabel={`Edit shift on ${formatFullDate(shift.clockIn)}`}
+                accessibilityRole="button"
+              >
                 <Pencil size={18} color={colors.textSecondary} />
               </Pressable>
               {shift.clockOut ? (
-                <Pressable onPress={() => setDeleting(shift)} hitSlop={8}>
+                <Pressable
+                  onPress={() => setDeleting(shift)}
+                  hitSlop={8}
+                  accessibilityLabel={`Delete shift on ${formatFullDate(shift.clockIn)}`}
+                  accessibilityRole="button"
+                >
                   <Trash2 size={18} color={colors.danger} />
                 </Pressable>
               ) : null}

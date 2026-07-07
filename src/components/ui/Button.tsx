@@ -1,12 +1,18 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import React from "react";
+import {
+    ActivityIndicator,
+    Pressable,
+    StyleSheet,
+    Text,
+    ViewStyle,
+} from "react-native";
 
-import { useTheme } from '@/theme/useTheme';
-import { radius, spacing } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
+import { radius, spacing } from "@/theme/spacing";
+import { typography } from "@/theme/typography";
+import { useTheme } from "@/theme/useTheme";
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'positive';
-type ButtonSize = 'sm' | 'md' | 'lg';
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "positive";
+type ButtonSize = "sm" | "md" | "lg";
 
 type ButtonProps = {
   label: string;
@@ -22,21 +28,29 @@ type ButtonProps = {
 export function Button({
   label,
   onPress,
-  variant = 'primary',
-  size = 'md',
+  variant = "primary",
+  size = "md",
   disabled = false,
   loading = false,
   icon,
   style,
 }: ButtonProps) {
+  const accessibilityLabel = `${label} button`;
   const { colors } = useTheme();
 
-  const palette: Record<ButtonVariant, { bg: string; fg: string; border?: string }> = {
+  const palette: Record<
+    ButtonVariant,
+    { bg: string; fg: string; border?: string }
+  > = {
     primary: { bg: colors.primary, fg: colors.onPrimary },
     positive: { bg: colors.positive, fg: colors.onPrimary },
     danger: { bg: colors.danger, fg: colors.onPrimary },
-    secondary: { bg: colors.surfaceAlt, fg: colors.text, border: colors.border },
-    ghost: { bg: 'transparent', fg: colors.primary },
+    secondary: {
+      bg: colors.surfaceAlt,
+      fg: colors.text,
+      border: colors.border,
+    },
+    ghost: { bg: "transparent", fg: colors.primary },
   };
 
   const { bg, fg, border } = palette[variant];
@@ -46,17 +60,21 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled: disabled || loading }}
       style={({ pressed }) => [
         styles.base,
         sizeStyle,
         {
           backgroundColor: bg,
-          borderColor: border ?? 'transparent',
+          borderColor: border ?? "transparent",
           borderWidth: border ? StyleSheet.hairlineWidth : 0,
           opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
         },
         style,
-      ]}>
+      ]}
+    >
       {loading ? (
         <ActivityIndicator color={fg} />
       ) : (
@@ -64,9 +82,10 @@ export function Button({
           {icon}
           <Text
             style={[
-              size === 'lg' ? typography.heading : typography.bodyMedium,
+              size === "lg" ? typography.heading : typography.bodyMedium,
               { color: fg },
-            ]}>
+            ]}
+          >
             {label}
           </Text>
         </>
@@ -77,9 +96,9 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: spacing.sm,
     borderRadius: radius.md,
   },
@@ -88,5 +107,9 @@ const styles = StyleSheet.create({
 const sizes: Record<ButtonSize, ViewStyle> = {
   sm: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   md: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
-  lg: { paddingVertical: spacing.lg, paddingHorizontal: spacing.xl, borderRadius: radius.lg },
+  lg: {
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+  },
 };
