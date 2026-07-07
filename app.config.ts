@@ -69,7 +69,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     "expo-sqlite",
     "expo-secure-store",
-    "@sentry/react-native",
+    [
+      "@sentry/react-native",
+      {
+        uploadSourceMaps: false,
+      },
+    ],
   ],
 
   experiments: {
