@@ -30,7 +30,7 @@ eas env:create --name SENTRY_AUTH_TOKEN --value "<token>" --environment producti
 
 ## 3. Re-enable source map upload
 
-In `app.config.ts`, remove `uploadSourceMaps: false` from the `@sentry/react-native` plugin config:
+In `app.config.ts`, remove `disableAutoUpload: true` from the `@sentry/react-native` plugin config:
 
 ```js
 [
@@ -39,7 +39,7 @@ In `app.config.ts`, remove `uploadSourceMaps: false` from the `@sentry/react-nat
     organization: "hourly-wallet",
     project: "android",
   },
-]
+];
 ```
 
 ## 4. Build

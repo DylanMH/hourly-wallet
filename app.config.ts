@@ -74,7 +74,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         organization: "hourly-wallet",
         project: "android",
-        uploadSourceMaps: false,
+        disableAutoUpload: true,
       },
     ],
   ],
