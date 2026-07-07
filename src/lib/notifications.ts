@@ -7,12 +7,16 @@ import { formatCurrency, formatHoursMinutes } from "@/lib/money";
 import type { Bill, BillOccurrence, Shift } from "@/lib/types";
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const isClockedIn =
+      notification.request.content.data?.type === "clocked-in";
+    return {
+      shouldShowBanner: !isClockedIn,
+      shouldShowList: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+    };
+  },
 });
 
 export async function requestNotificationPermission(): Promise<boolean> {

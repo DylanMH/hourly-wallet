@@ -61,7 +61,7 @@ export default function ClockScreen() {
     : jobNameById[selectedJobId ?? ""];
   const displayJobId = active ? shift?.jobId : selectedJobId;
 
-  useClockedInNotification(shift, targetJobName);
+  useClockedInNotification(shift, status, targetJobName);
 
   const jobOptions = hourlyJobs.map((j) => ({ label: j.name, value: j.id }));
 
