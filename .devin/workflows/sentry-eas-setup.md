@@ -22,10 +22,10 @@ eas env:create --name SENTRY_DSN --value "https://4cb0eaad1faf5df9abcb23a5f416a4
 
 ```bash
 # preview
-eas env:create --name SENTRY_AUTH_TOKEN --value "<token>" --environment preview --type secret
+eas env:create --name SENTRY_AUTH_TOKEN --value "<token>" --environment preview --visibility secret
 
 # production
-eas env:create --name SENTRY_AUTH_TOKEN --value "<token>" --environment production --type secret
+eas env:create --name SENTRY_AUTH_TOKEN --value "<token>" --environment production --visibility secret
 ```
 
 ## 3. Re-enable source map upload
