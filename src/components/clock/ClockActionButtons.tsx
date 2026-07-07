@@ -156,6 +156,7 @@ export function ClockActionButtons({
         <DatePicker
           value={new Date()}
           mode="time"
+          is24Hour={false}
           presentation="dialog"
           onValueChange={(_event: unknown, selected?: Date) => {
             setCustomTimePickerOpen(false);
