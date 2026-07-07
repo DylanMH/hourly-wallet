@@ -72,7 +72,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       "@sentry/react-native",
       {
-        uploadSourceMaps: false,
+        organization: "hourly-wallet",
+        project: "android",
       },
     ],
   ],
