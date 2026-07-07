@@ -1,22 +1,23 @@
-import { Plus } from 'lucide-react-native';
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Plus } from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text } from "react-native";
 
-import { ClockActionButtons } from '@/components/clock/ClockActionButtons';
-import { ClockStatusCard } from '@/components/clock/ClockStatusCard';
-import { ShiftFormModal } from '@/components/clock/ShiftFormModal';
-import { ShiftWeekList } from '@/components/clock/ShiftWeekList';
-import { Screen } from '@/components/ui/Screen';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { Select } from '@/components/ui/Select';
-import { useActiveShift } from '@/features/clock/useActiveShift';
-import { useRecentShifts } from '@/features/clock/useShifts';
-import { getJobs } from '@/db/queries/jobQueries';
-import type { Job, Shift } from '@/lib/types';
-import { useAppStore } from '@/state/appStore';
-import { useTheme } from '@/theme/useTheme';
-import { spacing } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
+import { ClockActionButtons } from "@/components/clock/ClockActionButtons";
+import { ClockStatusCard } from "@/components/clock/ClockStatusCard";
+import { ShiftFormModal } from "@/components/clock/ShiftFormModal";
+import { ShiftWeekList } from "@/components/clock/ShiftWeekList";
+import { Screen } from "@/components/ui/Screen";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Select } from "@/components/ui/Select";
+import { getJobs } from "@/db/queries/jobQueries";
+import { useActiveShift } from "@/features/clock/useActiveShift";
+import { useClockedInNotification } from "@/features/clock/useClockedInNotification";
+import { useRecentShifts } from "@/features/clock/useShifts";
+import type { Job, Shift } from "@/lib/types";
+import { useAppStore } from "@/state/appStore";
+import { spacing } from "@/theme/spacing";
+import { typography } from "@/theme/typography";
+import { useTheme } from "@/theme/useTheme";
 
 export default function ClockScreen() {
   const { colors } = useTheme();
@@ -52,11 +53,15 @@ export default function ClockScreen() {
   const hourlyJobs = useMemo(() => jobs.filter((j) => !j.isSalaried), [jobs]);
   const jobNameById = useMemo(
     () => Object.fromEntries(hourlyJobs.map((j) => [j.id, j.name])),
-    [hourlyJobs]
+    [hourlyJobs],
   );
   const activeJobName = shift ? jobNameById[shift.jobId] : undefined;
-  const targetJobName = active ? activeJobName : jobNameById[selectedJobId ?? ''];
+  const targetJobName = active
+    ? activeJobName
+    : jobNameById[selectedJobId ?? ""];
   const displayJobId = active ? shift?.jobId : selectedJobId;
+
+  useClockedInNotification(shift, targetJobName);
 
   const jobOptions = hourlyJobs.map((j) => ({ label: j.name, value: j.id }));
 
@@ -66,26 +71,35 @@ export default function ClockScreen() {
         if (jobNameById[s.jobId] === undefined) return false;
         return displayJobId ? s.jobId === displayJobId : true;
       }),
-    [shifts, displayJobId, jobNameById]
+    [shifts, displayJobId, jobNameById],
   );
 
   return (
     <Screen showLogo>
       <ClockStatusCard shift={shift} status={status} jobName={targetJobName} />
       {hourlyJobs.length === 0 ? (
-        <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center' }]}>
+        <Text
+          style={[
+            typography.body,
+            { color: colors.textSecondary, textAlign: "center" },
+          ]}
+        >
           Clock-in is only available for hourly jobs.
         </Text>
       ) : active ? null : (
         <Select
           label="Clock into"
-          value={selectedJobId ?? ''}
+          value={selectedJobId ?? ""}
           options={jobOptions}
           onChange={setSelectedJobId}
         />
       )}
       {hourlyJobs.length > 0 ? (
-        <ClockActionButtons status={status} jobId={selectedJobId} onChanged={refresh} />
+        <ClockActionButtons
+          status={status}
+          jobId={selectedJobId}
+          onChanged={refresh}
+        />
       ) : null}
 
       <SectionHeader
@@ -98,9 +112,14 @@ export default function ClockScreen() {
                 setFormVisible(true);
               }}
               style={styles.addButton}
-              hitSlop={8}>
+              hitSlop={8}
+            >
               <Plus size={18} color={colors.primary} />
-              <Text style={[typography.captionMedium, { color: colors.primary }]}>Add shift</Text>
+              <Text
+                style={[typography.captionMedium, { color: colors.primary }]}
+              >
+                Add shift
+              </Text>
             </Pressable>
           ) : undefined
         }
@@ -127,8 +146,8 @@ export default function ClockScreen() {
 
 const styles = StyleSheet.create({
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.xs,
   },
 });

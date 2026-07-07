@@ -1,8 +1,10 @@
-import * as Notifications from 'expo-notifications';
-import { parseISO, setHours, setMinutes, subDays } from 'date-fns';
+import { parseISO, setHours, setMinutes, subDays } from "date-fns";
+import * as Notifications from "expo-notifications";
 
-import { formatCurrency } from '@/lib/money';
-import type { Bill, BillOccurrence } from '@/lib/types';
+import { calculateWorkedMinutes } from "@/lib/calculations/shifts";
+import { formatTime } from "@/lib/dates";
+import { formatCurrency, formatHoursMinutes } from "@/lib/money";
+import type { Bill, BillOccurrence, Shift } from "@/lib/types";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -27,7 +29,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
  */
 export async function scheduleBillReminder(
   bill: Bill,
-  occurrence: BillOccurrence
+  occurrence: BillOccurrence,
 ): Promise<string | null> {
   try {
     const granted = await requestNotificationPermission();
@@ -40,7 +42,7 @@ export async function scheduleBillReminder(
 
     return await Notifications.scheduleNotificationAsync({
       content: {
-        title: `${bill.name} due ${daysBefore === 0 ? 'today' : `in ${daysBefore} day${daysBefore === 1 ? '' : 's'}`}`,
+        title: `${bill.name} due ${daysBefore === 0 ? "today" : `in ${daysBefore} day${daysBefore === 1 ? "" : "s"}`}`,
         body: `${formatCurrency(occurrence.amountSnapshot)} is due. Open Hourly Wallet to mark it paid.`,
       },
       trigger: {
@@ -53,10 +55,83 @@ export async function scheduleBillReminder(
   }
 }
 
-export async function cancelBillReminder(notificationId: string): Promise<void> {
+export async function cancelBillReminder(
+  notificationId: string,
+): Promise<void> {
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
   } catch {
     // Notification may already be delivered or cancelled; ignore.
+  }
+}
+
+export async function showClockedInNotification(
+  shift: Shift,
+  jobName?: string,
+): Promise<string | null> {
+  try {
+    const granted = await requestNotificationPermission();
+    if (!granted) return null;
+
+    const minutes = calculateWorkedMinutes(shift);
+    const gross = (minutes / 60) * shift.hourlyRateSnapshot;
+
+    return await Notifications.scheduleNotificationAsync({
+      content: {
+        title: jobName ? `Clocked in · ${jobName}` : "Clocked in",
+        body: `Since ${formatTime(shift.clockIn)} · ${formatHoursMinutes(minutes)} · ~${formatCurrency(gross)}`,
+        data: { type: "clocked-in" },
+        sticky: true,
+        autoDismiss: false,
+      },
+      trigger: null,
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function updateClockedInNotification(
+  notificationId: string,
+  shift: Shift,
+  jobName?: string,
+): Promise<void> {
+  try {
+    const minutes = calculateWorkedMinutes(shift);
+    const gross = (minutes / 60) * shift.hourlyRateSnapshot;
+    await Notifications.dismissNotificationAsync(notificationId);
+    await Notifications.scheduleNotificationAsync({
+      identifier: notificationId,
+      content: {
+        title: jobName ? `Clocked in · ${jobName}` : "Clocked in",
+        body: `Since ${formatTime(shift.clockIn)} · ${formatHoursMinutes(minutes)} · ~${formatCurrency(gross)}`,
+        data: { type: "clocked-in" },
+        sticky: true,
+        autoDismiss: false,
+      },
+      trigger: null,
+    });
+  } catch {
+    // Ignore update failures.
+  }
+}
+
+export async function dismissClockedInNotification(
+  notificationId?: string,
+): Promise<void> {
+  try {
+    if (notificationId) {
+      await Notifications.dismissNotificationAsync(notificationId);
+    }
+    const delivered = await Notifications.getPresentedNotificationsAsync();
+    await Promise.all(
+      delivered
+        .filter((n) => n.request.content.data?.type === "clocked-in")
+        .map((n) =>
+          Notifications.dismissNotificationAsync(n.request.identifier),
+        ),
+    );
+  } catch {
+    // Ignore dismiss failures.
   }
 }
