@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ActiveShiftCard } from "@/components/dashboard/ActiveShiftCard";
 import { BillsDueCard } from "@/components/dashboard/BillsDueCard";
 import { MonthlyAffordabilityCard } from "@/components/dashboard/MonthlyAffordabilityCard";
+import { MonthlyIncomeCard } from "@/components/dashboard/MonthlyIncomeCard";
 import { WeeklyPayCard } from "@/components/dashboard/WeeklyPayCard";
 import { Screen } from "@/components/ui/Screen";
 import { Select } from "@/components/ui/Select";
@@ -31,6 +32,7 @@ export default function DashboardScreen() {
     jobName,
     todayMinutes,
     weeklyPay,
+    monthlyProjection,
     affordability,
     netSoFar,
     occurrences,
@@ -120,6 +122,7 @@ export default function DashboardScreen() {
           onChanged={refresh}
         />
       ) : null}
+      <MonthlyIncomeCard projection={monthlyProjection} />
       <WeeklyPayCard pay={weeklyPay} />
       <MonthlyAffordabilityCard
         affordability={affordability}
