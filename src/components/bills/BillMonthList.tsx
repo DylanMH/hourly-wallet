@@ -1,40 +1,46 @@
-import { format, parseISO } from 'date-fns';
-import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { format, parseISO } from "date-fns";
+import { ChevronDown, ChevronRight } from "lucide-react-native";
+import { useMemo, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { BillCard } from '@/components/bills/BillCard';
-import { sumOccurrences } from '@/lib/calculations/bills';
-import { formatCurrency } from '@/lib/money';
-import type { BillOccurrenceWithBill } from '@/lib/types';
-import { useTheme } from '@/theme/useTheme';
-import { spacing } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
+import { BillCard } from "@/components/bills/BillCard";
+import { sumOccurrences } from "@/lib/calculations/bills";
+import { formatCurrency } from "@/lib/money";
+import type { BillOccurrenceWithBill } from "@/lib/types";
+import { spacing } from "@/theme/spacing";
+import { typography } from "@/theme/typography";
+import { useTheme } from "@/theme/useTheme";
 
 type BillMonthListProps = {
   occurrences: BillOccurrenceWithBill[];
   onTogglePaid: (occurrence: BillOccurrenceWithBill) => void;
   onEdit: (occurrence: BillOccurrenceWithBill) => void;
   onDelete: (occurrence: BillOccurrenceWithBill) => void;
-  sortOrder?: 'asc' | 'desc';
-  groupBy?: 'dueDate' | 'paidAt';
+  sortOrder?: "asc" | "desc";
+  groupBy?: "dueDate" | "paidAt";
 };
 
 function monthKey(iso: string): string {
-  return format(parseISO(iso), 'yyyy-MM');
+  return format(parseISO(iso), "yyyy-MM");
 }
 
 function monthLabel(iso: string): string {
-  return format(parseISO(iso), 'MMMM yyyy');
+  return format(parseISO(iso), "MMMM yyyy");
 }
 
-function groupKey(occ: BillOccurrenceWithBill, groupBy: 'dueDate' | 'paidAt'): string {
-  const iso = groupBy === 'paidAt' ? (occ.paidAt ?? occ.dueDate) : occ.dueDate;
+function groupKey(
+  occ: BillOccurrenceWithBill,
+  groupBy: "dueDate" | "paidAt",
+): string {
+  const iso = groupBy === "paidAt" ? (occ.paidAt ?? occ.dueDate) : occ.dueDate;
   return monthKey(iso);
 }
 
-function groupLabel(occ: BillOccurrenceWithBill, groupBy: 'dueDate' | 'paidAt'): string {
-  const iso = groupBy === 'paidAt' ? (occ.paidAt ?? occ.dueDate) : occ.dueDate;
+function groupLabel(
+  occ: BillOccurrenceWithBill,
+  groupBy: "dueDate" | "paidAt",
+): string {
+  const iso = groupBy === "paidAt" ? (occ.paidAt ?? occ.dueDate) : occ.dueDate;
   return monthLabel(iso);
 }
 
@@ -43,8 +49,8 @@ export function BillMonthList({
   onTogglePaid,
   onEdit,
   onDelete,
-  sortOrder = 'desc',
-  groupBy = 'dueDate',
+  sortOrder = "desc",
+  groupBy = "dueDate",
 }: BillMonthListProps) {
   const { colors } = useTheme();
 
@@ -57,14 +63,11 @@ export function BillMonthList({
       map.set(key, list);
     }
     return Array.from(map.entries()).sort((a, b) =>
-      sortOrder === 'asc' ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0])
+      sortOrder === "asc" ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]),
     );
   }, [occurrences, groupBy, sortOrder]);
 
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const firstKey = groups[0]?.[0];
-    return new Set(firstKey ? [firstKey] : []);
-  });
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   if (groups.length === 0) {
     return null;
@@ -90,12 +93,24 @@ export function BillMonthList({
         return (
           <View key={key} style={styles.group}>
             <Pressable
-              style={[styles.header, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-              onPress={() => toggle(key)}>
+              style={[
+                styles.header,
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surfaceAlt,
+                },
+              ]}
+              onPress={() => toggle(key)}
+            >
               <View style={styles.headerLeft}>
-                <Text style={[typography.bodyMedium, { color: colors.text }]}>{groupLabel(items[0], groupBy)}</Text>
-                <Text style={[typography.caption, { color: colors.textSecondary }]}>
-                  {items.length} bill{items.length === 1 ? '' : 's'} · {formatCurrency(total)}
+                <Text style={[typography.bodyMedium, { color: colors.text }]}>
+                  {groupLabel(items[0], groupBy)}
+                </Text>
+                <Text
+                  style={[typography.caption, { color: colors.textSecondary }]}
+                >
+                  {items.length} bill{items.length === 1 ? "" : "s"} ·{" "}
+                  {formatCurrency(total)}
                 </Text>
               </View>
               {isExpanded ? (
@@ -109,8 +124,13 @@ export function BillMonthList({
               <View
                 style={[
                   styles.items,
-                  { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md },
-                ]}>
+                  {
+                    backgroundColor: colors.surface,
+                    borderRadius: 12,
+                    padding: spacing.md,
+                  },
+                ]}
+              >
                 {items.map((occ) => (
                   <BillCard
                     key={occ.id}
@@ -137,9 +157,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     padding: spacing.md,
     borderWidth: 1,
     borderRadius: 12,

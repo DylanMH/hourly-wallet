@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.1.0
+
+### Added
+
+- Persistent clocked-in notification powered by Notifee foreground service with Android native chronometer; shows status + elapsed time even when the app is closed.
+- Jest mock for `@notifee/react-native`.
+- Local Android build scripts (`build:preview:android`, `build:dev:android`) for organized internal APKs.
+- Bills Overview tab with a category breakdown pie chart and quick filter chips.
+- `title` prop for `BillsByCategoryPieChart`.
+- Regression tests for minute-based overtime calculations.
+
+### Changed
+
+- Clocked-in notification body now shows status and start time instead of estimated earnings.
+- Bills screen defaults to the Overview tab.
+- Bill month groups and shift week groups now default to collapsed.
+- Shift history cards now display each break with start/end times, duration, and paid/unpaid status (matching the lunch format).
+
+### Fixed
+
+- Local Android preview builds failing due to Sentry source map upload requiring an auth token.
+- Android local builds now export `JAVA_HOME`, `ANDROID_HOME`, and disable Sentry auto-upload in the build scripts.
+
+### Technical
+
+- Replaced `expo-notifications` clocked-in handler with `@notifee/react-native`.
+- Added custom Expo config plugin for Notifee foreground service permissions.
+- Removed `.devin` directory from git tracking.
+
 ## 2.0.0
 
 ### Added

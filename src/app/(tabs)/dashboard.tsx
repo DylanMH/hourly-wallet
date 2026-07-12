@@ -30,11 +30,14 @@ export default function DashboardScreen() {
     selectedJobId,
     selectedJob,
     jobName,
+    now,
     todayMinutes,
     weeklyPay,
     monthlyProjection,
     affordability,
     netSoFar,
+    billsPaidAmount,
+    billsRemainingAmount,
     occurrences,
   } = useDashboardData(rawSelectedJobId);
 
@@ -127,8 +130,10 @@ export default function DashboardScreen() {
       <MonthlyAffordabilityCard
         affordability={affordability}
         netSoFar={netSoFar}
+        billsPaid={billsPaidAmount}
+        billsRemaining={billsRemainingAmount}
       />
-      <BillsDueCard occurrences={occurrences} />
+      <BillsDueCard occurrences={occurrences} now={now} />
     </Screen>
   );
 }

@@ -12,11 +12,15 @@ import { useTheme } from "@/theme/useTheme";
 type MonthlyAffordabilityCardProps = {
   affordability: MonthlyAffordability;
   netSoFar: number;
+  billsPaid: number;
+  billsRemaining: number;
 };
 
 export function MonthlyAffordabilityCard({
   affordability,
   netSoFar,
+  billsPaid,
+  billsRemaining,
 }: MonthlyAffordabilityCardProps) {
   const { colors } = useTheme();
   const { status, projectedNet, totalBillsDue, surplus } = affordability;
@@ -85,7 +89,33 @@ export function MonthlyAffordabilityCard({
           <Text
             style={[typography.captionMedium, { color: colors.textSecondary }]}
           >
-            After bills
+            Bills needed
+          </Text>
+          <MoneyText amount={totalBillsDue} size="md" tone="warning" />
+        </View>
+      </View>
+      <View style={styles.row}>
+        <View style={styles.item}>
+          <Text
+            style={[typography.captionMedium, { color: colors.textSecondary }]}
+          >
+            Bills paid
+          </Text>
+          <MoneyText amount={billsPaid} size="md" tone="positive" />
+        </View>
+        <View style={styles.item}>
+          <Text
+            style={[typography.captionMedium, { color: colors.textSecondary }]}
+          >
+            Bills remaining
+          </Text>
+          <MoneyText amount={billsRemaining} size="md" tone="warning" />
+        </View>
+        <View style={styles.item}>
+          <Text
+            style={[typography.captionMedium, { color: colors.textSecondary }]}
+          >
+            {surplus >= 0 ? "Surplus" : "Shortfall"}
           </Text>
           <MoneyText
             amount={surplus}
