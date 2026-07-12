@@ -1,66 +1,68 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { BillsByCategoryPieChart } from '@/components/reports/BillsByCategoryPieChart';
-import { HoursChart } from '@/components/reports/HoursChart';
-import { PaidBillsModal } from '@/components/reports/PaidBillsModal';
-import { Card } from '@/components/ui/Card';
-import { MoneyText } from '@/components/ui/MoneyText';
-import { Screen } from '@/components/ui/Screen';
-import { Select } from '@/components/ui/Select';
-import { StatCard } from '@/components/ui/StatCard';
-import { useBillOccurrences } from '@/features/bills/useBillOccurrences';
-import { usePaidBillsInRange } from '@/features/bills/usePaidBillsInRange';
-import { useShiftsInRange } from '@/features/clock/useShifts';
+import { BillsByCategoryPieChart } from "@/components/reports/BillsByCategoryPieChart";
+import { HoursChart } from "@/components/reports/HoursChart";
+import { PaidBillsModal } from "@/components/reports/PaidBillsModal";
+import { Card } from "@/components/ui/Card";
+import { MoneyText } from "@/components/ui/MoneyText";
+import { Screen } from "@/components/ui/Screen";
+import { Select } from "@/components/ui/Select";
+import { StatCard } from "@/components/ui/StatCard";
+import { getDefaultJob, getJobs } from "@/db/queries/jobQueries";
+import { useBillOccurrences } from "@/features/bills/useBillOccurrences";
+import { usePaidBillsInRange } from "@/features/bills/usePaidBillsInRange";
+import { useShiftsInRange } from "@/features/clock/useShifts";
 import {
-  buildPeriodReport,
-  getChartBars,
-  getReportRange,
-  ReportPeriod,
-} from '@/features/reports/reportService';
-import { getDefaultJob, getJobs } from '@/db/queries/jobQueries';
-import { useAppStore } from '@/state/appStore';
-import { hapticSelection } from '@/lib/haptics';
-import { formatHoursMinutes } from '@/lib/money';
-import type { Job } from '@/lib/types';
-import { parseISO } from 'date-fns';
-import { useTheme } from '@/theme/useTheme';
-import { radius, spacing } from '@/theme/spacing';
-import { typography } from '@/theme/typography';
+    buildPeriodReport,
+    getChartBars,
+    getReportRange,
+    ReportPeriod,
+} from "@/features/reports/reportService";
+import { useNowTicker } from "@/hooks/useNowTicker";
+import { hapticSelection } from "@/lib/haptics";
+import { formatHoursMinutes } from "@/lib/money";
+import type { Job } from "@/lib/types";
+import { useAppStore } from "@/state/appStore";
+import { radius, spacing } from "@/theme/spacing";
+import { typography } from "@/theme/typography";
+import { useTheme } from "@/theme/useTheme";
+import { parseISO } from "date-fns";
 
-const ALL_JOBS = 'all';
+const ALL_JOBS = "all";
 
 const PERIODS: { value: ReportPeriod; label: string }[] = [
-  { value: 'this-week', label: 'This week' },
-  { value: 'last-week', label: 'Last week' },
-  { value: 'this-month', label: 'This month' },
-  { value: 'last-month', label: 'Last month' },
-  { value: 'this-year', label: 'This year' },
+  { value: "this-week", label: "This week" },
+  { value: "last-week", label: "Last week" },
+  { value: "this-month", label: "This month" },
+  { value: "last-month", label: "Last month" },
+  { value: "this-year", label: "This year" },
 ];
 
 function defaultPeriodForJob(jobs: Job[], selectedJobId: string): ReportPeriod {
-  if (selectedJobId === ALL_JOBS) return 'this-week';
+  if (selectedJobId === ALL_JOBS) return "this-week";
   const job = jobs.find((j) => j.id === selectedJobId);
-  return job?.isSalaried ? 'this-month' : 'this-week';
+  return job?.isSalaried ? "this-month" : "this-week";
 }
 
 function chartTitleForPeriod(period: ReportPeriod): string {
   switch (period) {
-    case 'this-week':
-    case 'last-week':
-      return 'Hours by day';
-    case 'this-month':
-    case 'last-month':
-      return 'Hours by week';
-    case 'this-year':
-      return 'Hours by month';
+    case "this-week":
+    case "last-week":
+      return "Hours by day";
+    case "this-month":
+    case "last-month":
+      return "Hours by week";
+    case "this-year":
+      return "Hours by month";
   }
 }
 
 export default function ReportsScreen() {
   const { colors } = useTheme();
-  const [period, setPeriod] = useState<ReportPeriod>('this-week');
-  const range = useMemo(() => getReportRange(period), [period]);
+  const [period, setPeriod] = useState<ReportPeriod>("this-week");
+  const now = useNowTicker(true, 60000);
+  const range = useMemo(() => getReportRange(period, now), [period, now]);
   const { shifts: allShifts } = useShiftsInRange(range);
   const { occurrences } = useBillOccurrences();
   const { occurrences: paidBillsInRange } = usePaidBillsInRange(range);
@@ -77,7 +79,10 @@ export default function ReportsScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [allJobs, fallback] = await Promise.all([getJobs(), getDefaultJob()]);
+      const [allJobs, fallback] = await Promise.all([
+        getJobs(),
+        getDefaultJob(),
+      ]);
       if (cancelled) return;
       setJobs(allJobs);
       const current = selectedJobIdRef.current;
@@ -101,14 +106,18 @@ export default function ReportsScreen() {
       : allShifts.filter((s) => s.jobId === selectedJobId);
 
   const report = useMemo(
-    () => buildPeriodReport(shifts, occurrences, range, jobs, selectedJobId),
-    [shifts, occurrences, range, jobs, selectedJobId]
+    () =>
+      buildPeriodReport(shifts, occurrences, range, jobs, selectedJobId, now),
+    [shifts, occurrences, range, jobs, selectedJobId, now],
   );
 
   const paidByCategory = useMemo(() => {
     const map = new Map<string, number>();
     for (const occ of paidBillsInRange) {
-      map.set(occ.bill.category, (map.get(occ.bill.category) ?? 0) + occ.amountSnapshot);
+      map.set(
+        occ.bill.category,
+        (map.get(occ.bill.category) ?? 0) + occ.amountSnapshot,
+      );
     }
     return Array.from(map.entries())
       .map(([category, total]) => ({ category, total }))
@@ -117,7 +126,7 @@ export default function ReportsScreen() {
 
   const paidTotal = useMemo(
     () => paidByCategory.reduce((sum, item) => sum + item.total, 0),
-    [paidByCategory]
+    [paidByCategory],
   );
 
   const unpaidTotal = useMemo(() => {
@@ -132,11 +141,25 @@ export default function ReportsScreen() {
   const netAfterBills = report.pay.estimatedNetPay - paidTotal - unpaidTotal;
   const chartData = useMemo(
     () => getChartBars(period, shifts, range, jobs, selectedJobId),
-    [period, shifts, range, jobs, selectedJobId]
+    [period, shifts, range, jobs, selectedJobId],
   );
+  const pieEmptyLabel = useMemo(() => {
+    switch (period) {
+      case "this-week":
+        return "No bills paid this week.";
+      case "last-week":
+        return "No bills paid last week.";
+      case "this-month":
+        return "No bills paid this month.";
+      case "last-month":
+        return "No bills paid last month.";
+      case "this-year":
+        return "No bills paid this year.";
+    }
+  }, [period]);
 
   const jobOptions = [
-    { label: 'All jobs', value: ALL_JOBS },
+    { label: "All jobs", value: ALL_JOBS },
     ...jobs.map((j) => ({ label: j.name, value: j.id })),
   ];
 
@@ -152,7 +175,11 @@ export default function ReportsScreen() {
         }}
       />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chips}
+      >
         {PERIODS.map((p) => {
           const active = p.value === period;
           return (
@@ -168,12 +195,14 @@ export default function ReportsScreen() {
                   backgroundColor: active ? colors.primary : colors.surface,
                   borderColor: active ? colors.primary : colors.border,
                 },
-              ]}>
+              ]}
+            >
               <Text
                 style={[
                   typography.captionMedium,
                   { color: active ? colors.onPrimary : colors.textSecondary },
-                ]}>
+                ]}
+              >
                 {p.label}
               </Text>
             </Pressable>
@@ -186,6 +215,7 @@ export default function ReportsScreen() {
       <BillsByCategoryPieChart
         data={paidByCategory}
         onSelect={(category) => setSelectedCategory(category)}
+        emptyLabel={pieEmptyLabel}
       />
 
       <View style={styles.statRow}>
@@ -195,7 +225,7 @@ export default function ReportsScreen() {
           sublabel={
             report.pay.overtimeHours > 0
               ? `${report.pay.overtimeHours.toFixed(1)}h overtime`
-              : 'no overtime'
+              : "no overtime"
           }
         />
         <StatCard
@@ -204,7 +234,10 @@ export default function ReportsScreen() {
         />
       </View>
       <View style={styles.statRow}>
-        <StatCard label="Est. gross pay" value={`$${report.pay.grossPay.toFixed(2)}`} />
+        <StatCard
+          label="Est. gross pay"
+          value={`$${report.pay.grossPay.toFixed(2)}`}
+        />
         <StatCard
           label="Est. net pay"
           value={`$${report.pay.estimatedNetPay.toFixed(2)}`}
@@ -216,25 +249,53 @@ export default function ReportsScreen() {
         <Text style={[typography.heading, { color: colors.text }]}>Bills</Text>
         <View style={styles.billsRow}>
           <View style={styles.billsItem}>
-            <Text style={[typography.captionMedium, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[
+                typography.captionMedium,
+                { color: colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
               Paid
             </Text>
-            <MoneyText amount={paidTotal} size="sm" tone="positive" numberOfLines={1} />
+            <MoneyText
+              amount={paidTotal}
+              size="sm"
+              tone="positive"
+              numberOfLines={1}
+            />
           </View>
           <View style={styles.billsItem}>
-            <Text style={[typography.captionMedium, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[
+                typography.captionMedium,
+                { color: colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
               Unpaid
             </Text>
-            <MoneyText amount={unpaidTotal} size="sm" tone="warning" numberOfLines={1} />
+            <MoneyText
+              amount={unpaidTotal}
+              size="sm"
+              tone="warning"
+              numberOfLines={1}
+            />
           </View>
           <View style={styles.billsItem}>
-            <Text style={[typography.captionMedium, { color: colors.textSecondary }]} numberOfLines={1}>
+            <Text
+              style={[
+                typography.captionMedium,
+                { color: colors.textSecondary },
+              ]}
+              numberOfLines={1}
+            >
               Net
             </Text>
             <MoneyText
               amount={netAfterBills}
               size="sm"
-              tone={netAfterBills >= 0 ? 'positive' : 'danger'}
+              tone={netAfterBills >= 0 ? "positive" : "danger"}
               numberOfLines={1}
             />
           </View>
@@ -242,13 +303,16 @@ export default function ReportsScreen() {
         {paidByCategory.length > 0 && (
           <Select
             label="View category"
-            value={selectedCategory ?? 'all'}
+            value={selectedCategory ?? "all"}
             options={[
-              { label: 'All categories', value: 'all' },
-              ...paidByCategory.map((c) => ({ label: c.category, value: c.category })),
+              { label: "All categories", value: "all" },
+              ...paidByCategory.map((c) => ({
+                label: c.category,
+                value: c.category,
+              })),
             ]}
             onChange={(value) => {
-              setSelectedCategory(value === 'all' ? null : value);
+              setSelectedCategory(value === "all" ? null : value);
             }}
             style={{ marginTop: spacing.md }}
           />
@@ -257,7 +321,7 @@ export default function ReportsScreen() {
 
       <PaidBillsModal
         visible={!!selectedCategory}
-        category={selectedCategory ?? ''}
+        category={selectedCategory ?? ""}
         occurrences={paidBillsInRange}
         onClose={() => setSelectedCategory(null)}
       />
@@ -277,11 +341,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   statRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.md,
   },
   billsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: spacing.sm,
   },
   billsItem: {

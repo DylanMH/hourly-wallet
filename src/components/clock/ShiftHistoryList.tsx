@@ -1,3 +1,4 @@
+import { differenceInMinutes, parseISO } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -8,8 +9,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { deleteShift } from "@/db/queries/shiftQueries";
 import {
     calculateLunchMinutes,
-    calculatePaidBreakMinutes,
-    calculateUnpaidBreakMinutes,
     calculateWorkedHours,
     calculateWorkedMinutes,
 } from "@/lib/calculations/shifts";
@@ -26,12 +25,14 @@ type ShiftHistoryListProps = {
   shifts: Shift[];
   onEdit: (shift: Shift) => void;
   jobNameById?: Record<string, string>;
+  now?: Date;
 };
 
 export function ShiftHistoryList({
   shifts,
   onEdit,
   jobNameById,
+  now,
 }: ShiftHistoryListProps) {
   const { colors } = useTheme();
   const bumpShifts = useAppStore((s) => s.bumpShifts);
@@ -57,19 +58,11 @@ export function ShiftHistoryList({
   return (
     <View style={styles.list}>
       {sorted.map((shift) => {
-        const minutes = calculateWorkedMinutes(shift);
-        const gross = calculateWorkedHours(shift) * shift.hourlyRateSnapshot;
+        const minutes = calculateWorkedMinutes(shift, now);
+        const gross =
+          calculateWorkedHours(shift, now) * shift.hourlyRateSnapshot;
         const jobName = jobNameById?.[shift.jobId];
-        const lunchMinutes = calculateLunchMinutes(shift);
-        const paidBreakMinutes = calculatePaidBreakMinutes(shift);
-        const unpaidBreakMinutes = calculateUnpaidBreakMinutes(shift);
-        const breaks: string[] = [];
-        if (lunchMinutes > 0)
-          breaks.push(`${formatHoursMinutes(lunchMinutes)} lunch`);
-        if (paidBreakMinutes > 0)
-          breaks.push(`${formatHoursMinutes(paidBreakMinutes)} paid break`);
-        if (unpaidBreakMinutes > 0)
-          breaks.push(`${formatHoursMinutes(unpaidBreakMinutes)} unpaid break`);
+        const lunchMinutes = calculateLunchMinutes(shift, now);
         return (
           <Card key={shift.id} style={styles.item}>
             <View style={styles.itemMain}>
@@ -88,11 +81,34 @@ export function ShiftHistoryList({
                 {"  ·  ~"}
                 {formatCurrency(gross)} gross
               </Text>
-              {breaks.length > 0 ? (
+              {shift.lunchStart ? (
                 <Text style={[typography.caption, { color: colors.textMuted }]}>
-                  {breaks.join("  ·  ")}
+                  Lunch: {formatTime(shift.lunchStart)} –{" "}
+                  {shift.lunchEnd ? formatTime(shift.lunchEnd) : "in progress"}{" "}
+                  · {formatHoursMinutes(lunchMinutes)}
                 </Text>
               ) : null}
+              {shift.breaks.map((b, i) => {
+                const breakMinutes = b.end
+                  ? Math.max(
+                      0,
+                      differenceInMinutes(parseISO(b.end), parseISO(b.start)),
+                    )
+                  : now
+                    ? Math.max(0, differenceInMinutes(now, parseISO(b.start)))
+                    : 0;
+                return (
+                  <Text
+                    key={b.id}
+                    style={[typography.caption, { color: colors.textMuted }]}
+                  >
+                    Break {i + 1}: {formatTime(b.start)} –{" "}
+                    {b.end ? formatTime(b.end) : "in progress"} ·{" "}
+                    {formatHoursMinutes(breakMinutes)} ·{" "}
+                    {b.paid ? "paid" : "unpaid"}
+                  </Text>
+                );
+              })}
               {shift.notes ? (
                 <Text
                   style={[typography.caption, { color: colors.textMuted }]}

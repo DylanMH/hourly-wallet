@@ -13,6 +13,7 @@ import { getJobs } from "@/db/queries/jobQueries";
 import { useActiveShift } from "@/features/clock/useActiveShift";
 import { useClockedInNotification } from "@/features/clock/useClockedInNotification";
 import { useRecentShifts } from "@/features/clock/useShifts";
+import { useNowTicker } from "@/hooks/useNowTicker";
 import type { Job, Shift } from "@/lib/types";
 import { useAppStore } from "@/state/appStore";
 import { spacing } from "@/theme/spacing";
@@ -31,6 +32,7 @@ export default function ClockScreen() {
   const [selectedJobId, setSelectedJobId] = useState<string>();
 
   const active = shift != null && !shift.clockOut;
+  const now = useNowTicker(active, 30000);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +128,7 @@ export default function ClockScreen() {
       />
       <ShiftWeekList
         shifts={filteredShifts}
+        now={now}
         onEdit={(s) => {
           setEditingShift(s);
           setFormVisible(true);

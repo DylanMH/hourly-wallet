@@ -1,5 +1,8 @@
-import { calculateWorkedHours } from '@/lib/calculations/shifts';
-import type { Shift } from '@/lib/types';
+import {
+    calculateWorkedHours,
+    calculateWorkedMinutes,
+} from "@/lib/calculations/shifts";
+import type { Shift } from "@/lib/types";
 
 export type WeeklyHoursBreakdown = {
   totalHours: number;
@@ -26,31 +29,37 @@ export type PayBreakdown = {
  */
 export function calculateWeeklyRegularAndOvertimeHours(
   shifts: Shift[],
-  asOf: Date = new Date()
+  asOf: Date = new Date(),
 ): WeeklyHoursBreakdown {
   if (shifts.length === 0) {
     return { totalHours: 0, regularHours: 0, overtimeHours: 0 };
   }
 
-  const totalHours = shifts.reduce((sum, s) => sum + calculateWorkedHours(s, asOf), 0);
+  const totalMinutes = shifts.reduce(
+    (sum, s) => sum + calculateWorkedMinutes(s, asOf),
+    0,
+  );
   const latest = shifts[shifts.length - 1];
   const overtimeEnabled = latest.overtimeEnabledSnapshot;
-  const threshold = latest.overtimeThresholdSnapshot;
+  const thresholdMinutes = latest.overtimeThresholdSnapshot * 60;
+
+  const totalHours = totalMinutes / 60;
 
   if (!overtimeEnabled) {
     return { totalHours, regularHours: totalHours, overtimeHours: 0 };
   }
 
-  const excludedHours = shifts
+  const excludedMinutes = shifts
     .filter(
       (s) =>
         (s.isHolidayPay && !s.holidayPayInOvertimeSnapshot) ||
-        (s.isPTO && !s.ptoInOvertimeSnapshot)
+        (s.isPTO && !s.ptoInOvertimeSnapshot),
     )
-    .reduce((sum, s) => sum + calculateWorkedHours(s, asOf), 0);
-  const hoursTowardOvertime = Math.max(0, totalHours - excludedHours);
+    .reduce((sum, s) => sum + calculateWorkedMinutes(s, asOf), 0);
+  const minutesTowardOvertime = Math.max(0, totalMinutes - excludedMinutes);
 
-  const overtimeHours = Math.max(0, hoursTowardOvertime - threshold);
+  const overtimeMinutes = Math.max(0, minutesTowardOvertime - thresholdMinutes);
+  const overtimeHours = overtimeMinutes / 60;
   const regularHours = totalHours - overtimeHours;
   return { totalHours, regularHours, overtimeHours };
 }
@@ -59,16 +68,24 @@ export function calculateGrossPay(
   regularHours: number,
   overtimeHours: number,
   hourlyRate: number,
-  overtimeMultiplier: number
+  overtimeMultiplier: number,
 ): number {
-  return regularHours * hourlyRate + overtimeHours * hourlyRate * overtimeMultiplier;
+  return (
+    regularHours * hourlyRate + overtimeHours * hourlyRate * overtimeMultiplier
+  );
 }
 
-export function calculateEstimatedTaxes(grossPay: number, taxPercent: number): number {
+export function calculateEstimatedTaxes(
+  grossPay: number,
+  taxPercent: number,
+): number {
   return grossPay * (taxPercent / 100);
 }
 
-export function calculateEstimatedNetPay(grossPay: number, taxPercent: number): number {
+export function calculateEstimatedNetPay(
+  grossPay: number,
+  taxPercent: number,
+): number {
   return grossPay - calculateEstimatedTaxes(grossPay, taxPercent);
 }
 
@@ -76,7 +93,10 @@ export function calculateEstimatedNetPay(grossPay: number, taxPercent: number): 
  * Full estimated pay breakdown for one week of shifts, using each shift's
  * snapshots. Overtime hours are attributed at the blended latest rate.
  */
-export function calculateWeeklyPay(shifts: Shift[], asOf: Date = new Date()): PayBreakdown {
+export function calculateWeeklyPay(
+  shifts: Shift[],
+  asOf: Date = new Date(),
+): PayBreakdown {
   if (shifts.length === 0) {
     return {
       totalHours: 0,
@@ -87,10 +107,8 @@ export function calculateWeeklyPay(shifts: Shift[], asOf: Date = new Date()): Pa
       estimatedNetPay: 0,
     };
   }
-  const { totalHours, regularHours, overtimeHours } = calculateWeeklyRegularAndOvertimeHours(
-    shifts,
-    asOf
-  );
+  const { totalHours, regularHours, overtimeHours } =
+    calculateWeeklyRegularAndOvertimeHours(shifts, asOf);
   const latest = shifts[shifts.length - 1];
   const rate = latest.hourlyRateSnapshot;
   const multiplier = latest.overtimeMultiplierSnapshot;

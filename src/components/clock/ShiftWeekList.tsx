@@ -6,7 +6,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { ShiftHistoryList } from "@/components/clock/ShiftHistoryList";
 import { getJobs } from "@/db/queries/jobQueries";
 import { calculateWeeklyPay } from "@/lib/calculations/pay";
-import { calculateWorkedMinutes } from "@/lib/calculations/shifts";
+import {
+    calculateWorkedHours,
+    calculateWorkedMinutes,
+} from "@/lib/calculations/shifts";
 import { WEEK_STARTS_ON } from "@/lib/dates";
 import { formatCurrency, formatHoursMinutes } from "@/lib/money";
 import type { Job, Shift } from "@/lib/types";
@@ -17,6 +20,7 @@ import { useTheme } from "@/theme/useTheme";
 type ShiftWeekListProps = {
   shifts: Shift[];
   onEdit: (shift: Shift) => void;
+  now?: Date;
 };
 
 function weekKey(iso: string): string {
@@ -31,13 +35,11 @@ function weekLabel(start: Date, end: Date): string {
   return `${format(start, "MMM d")} - ${format(end, "MMM d, yyyy")}`;
 }
 
-export function ShiftWeekList({ shifts, onEdit }: ShiftWeekListProps) {
+export function ShiftWeekList({ shifts, onEdit, now }: ShiftWeekListProps) {
   const { colors } = useTheme();
   const [jobs, setJobs] = useState<Job[]>([]);
-  const currentWeekKey = weekKey(new Date().toISOString());
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set([currentWeekKey]),
-  );
+  const currentWeekKey = weekKey((now ?? new Date()).toISOString());
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -109,9 +111,9 @@ export function ShiftWeekList({ shifts, onEdit }: ShiftWeekListProps) {
         const end = endOfWeek(parseISO(key), {
           weekStartsOn: WEEK_STARTS_ON,
         });
-        const pay = calculateWeeklyPay(weekShifts);
+        const pay = calculateWeeklyPay(weekShifts, now);
         const totalMinutes = weekShifts.reduce(
-          (sum, s) => sum + calculateWorkedMinutes(s),
+          (sum, s) => sum + calculateWorkedMinutes(s, now),
           0,
         );
         const isExpanded = expanded.has(key);
@@ -161,6 +163,7 @@ export function ShiftWeekList({ shifts, onEdit }: ShiftWeekListProps) {
                   shifts={weekShifts}
                   onEdit={onEdit}
                   jobNameById={jobNameById}
+                  now={now}
                 />
               </View>
             ) : null}
@@ -175,11 +178,14 @@ function ShiftDayList({
   shifts,
   onEdit,
   jobNameById,
+  now,
 }: {
   shifts: Shift[];
   onEdit: (shift: Shift) => void;
   jobNameById: Record<string, string>;
+  now?: Date;
 }) {
+  const { colors } = useTheme();
   const days = useMemo(() => {
     const map = new Map<string, Shift[]>();
     const sorted = [...shifts].sort(
@@ -196,15 +202,38 @@ function ShiftDayList({
 
   return (
     <View style={styles.dayList}>
-      {days.map(([key, dayShifts]) => (
-        <View key={key} style={styles.day}>
-          <ShiftHistoryList
-            shifts={dayShifts}
-            onEdit={onEdit}
-            jobNameById={jobNameById}
-          />
-        </View>
-      ))}
+      {days.map(([key, dayShifts]) => {
+        const totalMinutes = dayShifts.reduce(
+          (sum, s) => sum + calculateWorkedMinutes(s, now),
+          0,
+        );
+        const gross = dayShifts.reduce(
+          (sum, s) => sum + calculateWorkedHours(s, now) * s.hourlyRateSnapshot,
+          0,
+        );
+        const date = parseISO(key);
+        return (
+          <View key={key} style={styles.day}>
+            <View style={styles.dayHeader}>
+              <Text style={[typography.bodyMedium, { color: colors.text }]}>
+                {format(date, "EEEE, MMM d")}
+              </Text>
+              <Text
+                style={[typography.caption, { color: colors.textSecondary }]}
+              >
+                {formatHoursMinutes(totalMinutes)} · {formatCurrency(gross)}{" "}
+                gross
+              </Text>
+            </View>
+            <ShiftHistoryList
+              shifts={dayShifts}
+              onEdit={onEdit}
+              jobNameById={jobNameById}
+              now={now}
+            />
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -235,5 +264,11 @@ const styles = StyleSheet.create({
   },
   day: {
     gap: spacing.sm,
+  },
+  dayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.sm,
   },
 });

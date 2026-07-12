@@ -1,9 +1,10 @@
 {
   "name": "hourly-wallet",
   "main": "expo-router/entry",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "dependencies": {
     "@expo/ui": "~57.0.4",
+    "@notifee/react-native": "^9.1.8",
     "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.6.2",
     "date-fns": "^4.4.0",
@@ -54,12 +55,23 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "build:preview:android": "bash scripts/build-preview-android.sh",
+    "build:dev:android": "bash scripts/build-development-android.sh"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@notifee/react-native"
+        ]
+      }
+    }
   },
   "private": true
 }

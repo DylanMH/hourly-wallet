@@ -16,7 +16,7 @@ import {
     getUnpaidBillsThisMonth,
     sumOccurrences,
 } from "@/lib/calculations/bills";
-import { calculateWeeklyPay } from "@/lib/calculations/pay";
+import { calculateWeeklyPay, PayBreakdown } from "@/lib/calculations/pay";
 import { calculateWeeklyPayForSalary } from "@/lib/calculations/salary";
 import { calculateWorkedMinutes } from "@/lib/calculations/shifts";
 import { getCurrentMonthRange, getCurrentWeekRange } from "@/lib/dates";
@@ -124,20 +124,37 @@ export function useDashboardData(selectedJobId: string): DashboardData {
     if (selectedJob?.isSalaried) {
       return calculateWeeklyPayForSalary(selectedJob);
     }
-    const base = calculateWeeklyPay(weekShifts, now);
     if (effectiveSelectedJobId === ALL_JOBS) {
-      for (const job of jobs) {
+      const empty: PayBreakdown = {
+        totalHours: 0,
+        regularHours: 0,
+        overtimeHours: 0,
+        grossPay: 0,
+        estimatedTaxes: 0,
+        estimatedNetPay: 0,
+      };
+      return jobs.reduce((acc, job) => {
         if (job.isSalaried) {
           const salary = calculateWeeklyPayForSalary(job);
-          base.totalHours += salary.totalHours;
-          base.regularHours += salary.regularHours;
-          base.grossPay += salary.grossPay;
-          base.estimatedTaxes += salary.estimatedTaxes;
-          base.estimatedNetPay += salary.estimatedNetPay;
+          acc.totalHours += salary.totalHours;
+          acc.regularHours += salary.regularHours;
+          acc.grossPay += salary.grossPay;
+          acc.estimatedTaxes += salary.estimatedTaxes;
+          acc.estimatedNetPay += salary.estimatedNetPay;
+        } else {
+          const jobShifts = weekShifts.filter((s) => s.jobId === job.id);
+          const pay = calculateWeeklyPay(jobShifts, now);
+          acc.totalHours += pay.totalHours;
+          acc.regularHours += pay.regularHours;
+          acc.overtimeHours += pay.overtimeHours;
+          acc.grossPay += pay.grossPay;
+          acc.estimatedTaxes += pay.estimatedTaxes;
+          acc.estimatedNetPay += pay.estimatedNetPay;
         }
-      }
+        return acc;
+      }, empty);
     }
-    return base;
+    return calculateWeeklyPay(weekShifts, now);
   }, [weekShifts, jobs, selectedJob, effectiveSelectedJobId, now]);
 
   const monthlyProjection = useMemo(

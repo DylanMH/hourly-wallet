@@ -1,12 +1,11 @@
-import { getDay } from 'date-fns';
-
-import { calculateWeeklyPay } from '@/lib/calculations/pay';
+import { countWorkdaysInRange } from "@/lib/calculations/dateUtils";
+import { calculateWeeklyPay } from "@/lib/calculations/pay";
 import {
-  getMonthlyGrossForSalary,
-  getSalaryNet,
-} from '@/lib/calculations/salary';
-import { getCurrentMonthRange, getWeekRangeFor } from '@/lib/dates';
-import type { Job, Shift } from '@/lib/types';
+    getMonthlyGrossForSalary,
+    getSalaryNet,
+} from "@/lib/calculations/salary";
+import { getCurrentMonthRange, getWeekRangeFor } from "@/lib/dates";
+import type { Job, Shift } from "@/lib/types";
 
 export type MonthlyProjection = {
   netSoFar: number;
@@ -15,7 +14,7 @@ export type MonthlyProjection = {
   projectedGross: number;
 };
 
-export type AffordabilityStatus = 'on-track' | 'close' | 'shortfall';
+export type AffordabilityStatus = "on-track" | "close" | "shortfall";
 
 export type MonthlyAffordability = {
   status: AffordabilityStatus;
@@ -28,7 +27,9 @@ export type MonthlyAffordability = {
 export function groupShiftsByWeek(shifts: Shift[]): Map<string, Shift[]> {
   const map = new Map<string, Shift[]>();
   for (const shift of shifts) {
-    const weekStart = getWeekRangeFor(new Date(shift.clockIn)).start.toISOString();
+    const weekStart = getWeekRangeFor(
+      new Date(shift.clockIn),
+    ).start.toISOString();
     const list = map.get(weekStart) ?? [];
     list.push(shift);
     map.set(weekStart, list);
@@ -39,7 +40,7 @@ export function groupShiftsByWeek(shifts: Shift[]): Map<string, Shift[]> {
 /** Sums estimated net/gross pay for a set of shifts, respecting weekly overtime. */
 export function sumPayForShifts(
   shifts: Shift[],
-  asOf: Date = new Date()
+  asOf: Date = new Date(),
 ): { gross: number; net: number } {
   const weeks = groupShiftsByWeek(shifts);
   let gross = 0;
@@ -52,32 +53,20 @@ export function sumPayForShifts(
   return { gross, net };
 }
 
-/** Returns true when the date falls within the first N days of the week (Mon-Sun). */
-function isWorkday(date: Date, workDaysPerWeek: number): boolean {
-  const day = getDay(date);
-  if (day === 0) return workDaysPerWeek >= 7;
-  return day <= workDaysPerWeek;
-}
-
-/** Counts configured workdays between two dates, inclusive of both endpoints. */
-function countWorkdaysInRange(start: Date, end: Date, workDaysPerWeek: number): number {
-  let count = 0;
-  const current = new Date(start);
-  const last = new Date(end);
-  current.setHours(0, 0, 0, 0);
-  last.setHours(0, 0, 0, 0);
-  while (current <= last) {
-    if (isWorkday(current, workDaysPerWeek)) count++;
-    current.setDate(current.getDate() + 1);
-  }
-  return count;
-}
-
-function projectIncomeForJob(job: Job, shifts: Shift[], now: Date): MonthlyProjection {
+function projectIncomeForJob(
+  job: Job,
+  shifts: Shift[],
+  now: Date,
+): MonthlyProjection {
   if (job.isSalaried) {
     const gross = getMonthlyGrossForSalary(job);
     const net = getSalaryNet(gross, job.taxPercent);
-    return { netSoFar: net, grossSoFar: gross, projectedNet: net, projectedGross: gross };
+    return {
+      netSoFar: net,
+      grossSoFar: gross,
+      projectedNet: net,
+      projectedGross: gross,
+    };
   }
 
   const { start } = getCurrentMonthRange(now);
@@ -86,7 +75,7 @@ function projectIncomeForJob(job: Job, shifts: Shift[], now: Date): MonthlyProje
   const workdaysInMonth = countWorkdaysInRange(
     start,
     new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    job.workDaysPerWeek
+    job.workDaysPerWeek,
   );
   const effectiveElapsed = Math.max(1, elapsedWorkdays);
   const projectedNet = (net / effectiveElapsed) * workdaysInMonth;
@@ -103,9 +92,9 @@ export function projectMonthlyIncome(
   monthShifts: Shift[],
   jobs: Job[],
   selectedJobId: string | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
 ): MonthlyProjection {
-  if (selectedJobId && selectedJobId !== 'all') {
+  if (selectedJobId && selectedJobId !== "all") {
     const job = jobs.find((j) => j.id === selectedJobId);
     if (!job) {
       return { netSoFar: 0, grossSoFar: 0, projectedNet: 0, projectedGross: 0 };
@@ -114,7 +103,12 @@ export function projectMonthlyIncome(
     return projectIncomeForJob(job, shifts, now);
   }
 
-  const result = { netSoFar: 0, grossSoFar: 0, projectedNet: 0, projectedGross: 0 };
+  const result = {
+    netSoFar: 0,
+    grossSoFar: 0,
+    projectedNet: 0,
+    projectedGross: 0,
+  };
   for (const job of jobs) {
     const shifts = monthShifts.filter((s) => s.jobId === job.id);
     const projection = projectIncomeForJob(job, shifts, now);
@@ -132,17 +126,17 @@ export function projectMonthlyIncome(
  */
 export function calculateMonthlyAffordability(
   projectedNet: number,
-  totalBillsDue: number
+  totalBillsDue: number,
 ): MonthlyAffordability {
   const surplus = projectedNet - totalBillsDue;
   const closeThreshold = Math.max(totalBillsDue * 0.1, 50);
   let status: AffordabilityStatus;
   if (surplus >= closeThreshold) {
-    status = 'on-track';
+    status = "on-track";
   } else if (surplus >= 0) {
-    status = 'close';
+    status = "close";
   } else {
-    status = 'shortfall';
+    status = "shortfall";
   }
   return { status, projectedNet, totalBillsDue, surplus };
 }

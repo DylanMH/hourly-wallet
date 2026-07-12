@@ -48,3 +48,5 @@ example
 .claude/
 .vscode/
 CLAUDE.md
+.idea/
+*.devin/
