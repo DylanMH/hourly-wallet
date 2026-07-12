@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 
 import {
     dismissClockedInNotification,
@@ -11,7 +12,6 @@ import { useAppStore } from "@/state/appStore";
 export function useClockedInNotification(
   shift: Shift | null,
   status: ClockStatus,
-  _jobName?: string,
 ) {
   const notificationsEnabled = useAppStore((s) => s.notificationsEnabled);
   const notificationIdRef = useRef<string | null>(null);
@@ -31,9 +31,7 @@ export function useClockedInNotification(
       const currentShift = shiftRef.current;
       const currentStatus = statusRef.current;
       if (!notificationsEnabled || !currentShift || !active) {
-        await dismissClockedInNotification(
-          notificationIdRef.current ?? undefined,
-        );
+        await dismissClockedInNotification();
         notificationIdRef.current = null;
         return;
       }
@@ -46,11 +44,7 @@ export function useClockedInNotification(
           currentStatus,
         );
       } else {
-        await updateClockedInNotification(
-          notificationIdRef.current,
-          currentShift,
-          currentStatus,
-        );
+        await updateClockedInNotification(currentShift, currentStatus);
       }
     };
   });
@@ -58,4 +52,28 @@ export function useClockedInNotification(
   useEffect(() => {
     syncRef.current();
   }, [active, shiftId, status, notificationsEnabled]);
+
+  // Periodically refresh the notification body so worked time stays current
+  // while the app is in the foreground.
+  useEffect(() => {
+    if (!active || !notificationsEnabled) return;
+    const interval = setInterval(() => {
+      syncRef.current();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [active, notificationsEnabled]);
+
+  // Re-sync when the app returns to foreground — the foreground service
+  // may have been killed by the OS while backgrounded.
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      "change",
+      (state: AppStateStatus) => {
+        if (state === "active") {
+          syncRef.current();
+        }
+      },
+    );
+    return () => subscription.remove();
+  }, []);
 }

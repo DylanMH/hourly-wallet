@@ -1,6 +1,6 @@
-import { getDatabase } from '@/db/database';
-import { generateId } from '@/lib/ids';
-import type { Shift, ShiftBreak } from '@/lib/types';
+import { getDatabase } from "@/db/database";
+import { generateId } from "@/lib/ids";
+import type { Shift, ShiftBreak, ShiftLunch } from "@/lib/types";
 
 type ShiftRow = {
   id: string;
@@ -8,8 +8,6 @@ type ShiftRow = {
   date: string;
   clock_in: string;
   clock_out: string | null;
-  lunch_start: string | null;
-  lunch_end: string | null;
   notes: string | null;
   is_holiday_pay: number;
   is_pto: number;
@@ -24,6 +22,13 @@ type ShiftRow = {
   updated_at: string;
 };
 
+type LunchRow = {
+  id: string;
+  shift_id: string;
+  start: string;
+  end: string | null;
+};
+
 type BreakRow = {
   id: string;
   shift_id: string;
@@ -32,15 +37,18 @@ type BreakRow = {
   paid: number;
 };
 
-function rowToShift(row: ShiftRow, breaks: ShiftBreak[]): Shift {
+function rowToShift(
+  row: ShiftRow,
+  lunches: ShiftLunch[],
+  breaks: ShiftBreak[],
+): Shift {
   return {
     id: row.id,
     jobId: row.job_id,
     date: row.date,
     clockIn: row.clock_in,
     clockOut: row.clock_out ?? undefined,
-    lunchStart: row.lunch_start ?? undefined,
-    lunchEnd: row.lunch_end ?? undefined,
+    lunches,
     breaks,
     notes: row.notes ?? undefined,
     isHolidayPay: row.is_holiday_pay === 1,
@@ -57,6 +65,14 @@ function rowToShift(row: ShiftRow, breaks: ShiftBreak[]): Shift {
   };
 }
 
+function rowToLunch(row: LunchRow): ShiftLunch {
+  return {
+    id: row.id,
+    start: row.start,
+    end: row.end ?? undefined,
+  };
+}
+
 function rowToBreak(row: BreakRow): ShiftBreak {
   return {
     id: row.id,
@@ -66,14 +82,35 @@ function rowToBreak(row: BreakRow): ShiftBreak {
   };
 }
 
-async function getBreaksForShiftIds(shiftIds: string[]): Promise<Map<string, ShiftBreak[]>> {
+async function getLunchesForShiftIds(
+  shiftIds: string[],
+): Promise<Map<string, ShiftLunch[]>> {
+  const map = new Map<string, ShiftLunch[]>();
+  if (shiftIds.length === 0) return map;
+  const db = getDatabase();
+  const placeholders = shiftIds.map(() => "?").join(",");
+  const rows = await db.getAllAsync<LunchRow>(
+    `SELECT * FROM shift_lunches WHERE shift_id IN (${placeholders}) ORDER BY start ASC`,
+    ...shiftIds,
+  );
+  for (const row of rows) {
+    const list = map.get(row.shift_id) ?? [];
+    list.push(rowToLunch(row));
+    map.set(row.shift_id, list);
+  }
+  return map;
+}
+
+async function getBreaksForShiftIds(
+  shiftIds: string[],
+): Promise<Map<string, ShiftBreak[]>> {
   const map = new Map<string, ShiftBreak[]>();
   if (shiftIds.length === 0) return map;
   const db = getDatabase();
-  const placeholders = shiftIds.map(() => '?').join(',');
+  const placeholders = shiftIds.map(() => "?").join(",");
   const rows = await db.getAllAsync<BreakRow>(
     `SELECT * FROM shift_breaks WHERE shift_id IN (${placeholders}) ORDER BY start ASC`,
-    ...shiftIds
+    ...shiftIds,
   );
   for (const row of rows) {
     const list = map.get(row.shift_id) ?? [];
@@ -84,13 +121,21 @@ async function getBreaksForShiftIds(shiftIds: string[]): Promise<Map<string, Shi
 }
 
 async function attachBreaks(rows: ShiftRow[]): Promise<Shift[]> {
-  const breakMap = await getBreaksForShiftIds(rows.map((r) => r.id));
-  return rows.map((row) => rowToShift(row, breakMap.get(row.id) ?? []));
+  const [lunchMap, breakMap] = await Promise.all([
+    getLunchesForShiftIds(rows.map((r) => r.id)),
+    getBreaksForShiftIds(rows.map((r) => r.id)),
+  ]);
+  return rows.map((row) =>
+    rowToShift(row, lunchMap.get(row.id) ?? [], breakMap.get(row.id) ?? []),
+  );
 }
 
 export async function getShiftById(id: string): Promise<Shift | null> {
   const db = getDatabase();
-  const row = await db.getFirstAsync<ShiftRow>('SELECT * FROM shifts WHERE id = ?', id);
+  const row = await db.getFirstAsync<ShiftRow>(
+    "SELECT * FROM shifts WHERE id = ?",
+    id,
+  );
   if (!row) return null;
   const [shift] = await attachBreaks([row]);
   return shift;
@@ -99,19 +144,22 @@ export async function getShiftById(id: string): Promise<Shift | null> {
 export async function getActiveShift(): Promise<Shift | null> {
   const db = getDatabase();
   const row = await db.getFirstAsync<ShiftRow>(
-    'SELECT * FROM shifts WHERE clock_out IS NULL ORDER BY clock_in DESC LIMIT 1'
+    "SELECT * FROM shifts WHERE clock_out IS NULL ORDER BY clock_in DESC LIMIT 1",
   );
   if (!row) return null;
   const [shift] = await attachBreaks([row]);
   return shift;
 }
 
-export async function getShiftsBetween(startIso: string, endIso: string): Promise<Shift[]> {
+export async function getShiftsBetween(
+  startIso: string,
+  endIso: string,
+): Promise<Shift[]> {
   const db = getDatabase();
   const rows = await db.getAllAsync<ShiftRow>(
-    'SELECT * FROM shifts WHERE clock_in >= ? AND clock_in <= ? ORDER BY clock_in ASC',
+    "SELECT * FROM shifts WHERE clock_in >= ? AND clock_in <= ? ORDER BY clock_in ASC",
     startIso,
-    endIso
+    endIso,
   );
   return attachBreaks(rows);
 }
@@ -119,14 +167,14 @@ export async function getShiftsBetween(startIso: string, endIso: string): Promis
 export async function getRecentShifts(limit = 20): Promise<Shift[]> {
   const db = getDatabase();
   const rows = await db.getAllAsync<ShiftRow>(
-    'SELECT * FROM shifts ORDER BY clock_in DESC LIMIT ?',
-    limit
+    "SELECT * FROM shifts ORDER BY clock_in DESC LIMIT ?",
+    limit,
   );
   return attachBreaks(rows);
 }
 
 export async function insertShift(
-  shift: Omit<Shift, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
+  shift: Omit<Shift, "id" | "createdAt" | "updatedAt"> & { id?: string },
 ): Promise<Shift> {
   const db = getDatabase();
   const now = new Date().toISOString();
@@ -138,17 +186,15 @@ export async function insertShift(
   };
   await db.runAsync(
     `INSERT INTO shifts (
-      id, job_id, date, clock_in, clock_out, lunch_start, lunch_end, notes,
+      id, job_id, date, clock_in, clock_out, notes,
       is_holiday_pay, is_pto, hourly_rate_snapshot, overtime_enabled_snapshot, overtime_multiplier_snapshot,
       overtime_threshold_snapshot, tax_percent_snapshot, holiday_pay_in_overtime_snapshot, pto_in_overtime_snapshot, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     full.id,
     full.jobId,
     full.date,
     full.clockIn,
     full.clockOut ?? null,
-    full.lunchStart ?? null,
-    full.lunchEnd ?? null,
     full.notes ?? null,
     full.isHolidayPay ? 1 : 0,
     full.isPTO ? 1 : 0,
@@ -160,8 +206,11 @@ export async function insertShift(
     full.holidayPayInOvertimeSnapshot ? 1 : 0,
     full.ptoInOvertimeSnapshot ? 1 : 0,
     full.createdAt,
-    full.updatedAt
+    full.updatedAt,
   );
+  for (const lunch of full.lunches) {
+    await insertLunch(full.id, lunch);
+  }
   for (const brk of full.breaks) {
     await insertBreak(full.id, brk);
   }
@@ -173,7 +222,7 @@ export async function updateShift(shift: Shift): Promise<Shift> {
   const updated: Shift = { ...shift, updatedAt: new Date().toISOString() };
   await db.runAsync(
     `UPDATE shifts SET
-      job_id = ?, date = ?, clock_in = ?, clock_out = ?, lunch_start = ?, lunch_end = ?, notes = ?,
+      job_id = ?, date = ?, clock_in = ?, clock_out = ?, notes = ?,
       is_holiday_pay = ?, is_pto = ?, hourly_rate_snapshot = ?, overtime_enabled_snapshot = ?, overtime_multiplier_snapshot = ?,
       overtime_threshold_snapshot = ?, tax_percent_snapshot = ?, holiday_pay_in_overtime_snapshot = ?, pto_in_overtime_snapshot = ?, updated_at = ?
     WHERE id = ?`,
@@ -181,8 +230,6 @@ export async function updateShift(shift: Shift): Promise<Shift> {
     updated.date,
     updated.clockIn,
     updated.clockOut ?? null,
-    updated.lunchStart ?? null,
-    updated.lunchEnd ?? null,
     updated.notes ?? null,
     updated.isHolidayPay ? 1 : 0,
     updated.isPTO ? 1 : 0,
@@ -194,9 +241,13 @@ export async function updateShift(shift: Shift): Promise<Shift> {
     updated.holidayPayInOvertimeSnapshot ? 1 : 0,
     updated.ptoInOvertimeSnapshot ? 1 : 0,
     updated.updatedAt,
-    updated.id
+    updated.id,
   );
-  await db.runAsync('DELETE FROM shift_breaks WHERE shift_id = ?', updated.id);
+  await db.runAsync("DELETE FROM shift_lunches WHERE shift_id = ?", updated.id);
+  for (const lunch of updated.lunches) {
+    await insertLunch(updated.id, lunch);
+  }
+  await db.runAsync("DELETE FROM shift_breaks WHERE shift_id = ?", updated.id);
   for (const brk of updated.breaks) {
     await insertBreak(updated.id, brk);
   }
@@ -205,24 +256,38 @@ export async function updateShift(shift: Shift): Promise<Shift> {
 
 export async function deleteShift(id: string): Promise<void> {
   const db = getDatabase();
-  await db.runAsync('DELETE FROM shift_breaks WHERE shift_id = ?', id);
-  await db.runAsync('DELETE FROM shifts WHERE id = ?', id);
+  await db.runAsync("DELETE FROM shift_lunches WHERE shift_id = ?", id);
+  await db.runAsync("DELETE FROM shift_breaks WHERE shift_id = ?", id);
+  await db.runAsync("DELETE FROM shifts WHERE id = ?", id);
+}
+
+async function insertLunch(shiftId: string, lunch: ShiftLunch): Promise<void> {
+  const db = getDatabase();
+  await db.runAsync(
+    "INSERT INTO shift_lunches (id, shift_id, start, end) VALUES (?, ?, ?, ?)",
+    lunch.id || generateId(),
+    shiftId,
+    lunch.start,
+    lunch.end ?? null,
+  );
 }
 
 async function insertBreak(shiftId: string, brk: ShiftBreak): Promise<void> {
   const db = getDatabase();
   await db.runAsync(
-    'INSERT INTO shift_breaks (id, shift_id, start, end, paid) VALUES (?, ?, ?, ?, ?)',
+    "INSERT INTO shift_breaks (id, shift_id, start, end, paid) VALUES (?, ?, ?, ?, ?)",
     brk.id || generateId(),
     shiftId,
     brk.start,
     brk.end ?? null,
-    brk.paid ? 1 : 0
+    brk.paid ? 1 : 0,
   );
 }
 
 export async function getAllShifts(): Promise<Shift[]> {
   const db = getDatabase();
-  const rows = await db.getAllAsync<ShiftRow>('SELECT * FROM shifts ORDER BY clock_in ASC');
+  const rows = await db.getAllAsync<ShiftRow>(
+    "SELECT * FROM shifts ORDER BY clock_in ASC",
+  );
   return attachBreaks(rows);
 }

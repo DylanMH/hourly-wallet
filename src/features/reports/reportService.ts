@@ -70,6 +70,8 @@ function getSalaryPayForRange(job: Job, range: DateRange): PayBreakdown {
     totalHours: days * 8,
     regularHours: days * 8,
     overtimeHours: 0,
+    regularEarnings: gross,
+    overtimeEarnings: 0,
     grossPay: gross,
     estimatedTaxes: gross - net,
     estimatedNetPay: net,
@@ -82,6 +84,8 @@ function aggregatePayForShifts(shifts: Shift[], asOf: Date): PayBreakdown {
     totalHours: 0,
     regularHours: 0,
     overtimeHours: 0,
+    regularEarnings: 0,
+    overtimeEarnings: 0,
     grossPay: 0,
     estimatedTaxes: 0,
     estimatedNetPay: 0,
@@ -93,6 +97,8 @@ function aggregatePayForShifts(shifts: Shift[], asOf: Date): PayBreakdown {
     acc.totalHours += pay.totalHours;
     acc.regularHours += pay.regularHours;
     acc.overtimeHours += pay.overtimeHours;
+    acc.regularEarnings += pay.regularEarnings;
+    acc.overtimeEarnings += pay.overtimeEarnings;
     acc.grossPay += pay.grossPay;
     acc.estimatedTaxes += pay.estimatedTaxes;
     acc.estimatedNetPay += pay.estimatedNetPay;
@@ -230,6 +236,8 @@ export function buildPeriodReport(
     totalHours: 0,
     regularHours: 0,
     overtimeHours: 0,
+    regularEarnings: 0,
+    overtimeEarnings: 0,
     grossPay: 0,
     estimatedTaxes: 0,
     estimatedNetPay: 0,
@@ -256,6 +264,8 @@ export function buildPeriodReport(
       pay.totalHours += jobPay.totalHours;
       pay.regularHours += jobPay.regularHours;
       pay.overtimeHours += jobPay.overtimeHours;
+      pay.regularEarnings += jobPay.regularEarnings;
+      pay.overtimeEarnings += jobPay.overtimeEarnings;
       pay.grossPay += jobPay.grossPay;
       pay.estimatedTaxes += jobPay.estimatedTaxes;
       pay.estimatedNetPay += jobPay.estimatedNetPay;

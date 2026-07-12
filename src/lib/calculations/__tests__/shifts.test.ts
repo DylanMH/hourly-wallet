@@ -10,17 +10,32 @@ import {
 
 import type { Shift } from "@/lib/types";
 
-function makeShift(
-  partial: Partial<Shift> & { clockIn: string; clockOut?: string },
-): Shift {
+type PartialShiftInput = Partial<Shift> & {
+  clockIn: string;
+  clockOut?: string;
+  lunchStart?: string;
+  lunchEnd?: string;
+};
+
+function makeShift(partial: PartialShiftInput): Shift {
+  const lunches =
+    partial.lunches ??
+    (partial.lunchStart
+      ? [
+          {
+            id: "lunch-1",
+            start: partial.lunchStart,
+            end: partial.lunchEnd,
+          },
+        ]
+      : []);
   return {
     id: "shift-1",
     jobId: "job-1",
     date: "2026-01-01",
     clockIn: partial.clockIn,
     clockOut: partial.clockOut,
-    lunchStart: partial.lunchStart,
-    lunchEnd: partial.lunchEnd,
+    lunches,
     breaks: partial.breaks ?? [],
     notes: undefined,
     isHolidayPay: false,
@@ -86,5 +101,64 @@ describe("shift calculations", () => {
     const asOf = new Date("2026-01-01T12:00:00.000Z");
     const shift = makeShift({ clockIn });
     expect(calculateWorkedMinutes(shift, asOf)).toBe(180);
+  });
+
+  test("does not add worked time while on lunch", () => {
+    const clockIn = "2026-01-01T09:00:30.000Z";
+    const lunchStart = "2026-01-01T09:05:45.000Z";
+    const workedBeforeLunch = calculateWorkedMinutes(
+      makeShift({ clockIn, lunchStart }),
+      new Date(lunchStart),
+    );
+
+    const asOfTimes = [
+      "2026-01-01T09:06:00.000Z",
+      "2026-01-01T09:06:29.000Z",
+      "2026-01-01T09:06:30.000Z",
+      "2026-01-01T09:07:15.000Z",
+      "2026-01-01T09:10:00.000Z",
+    ];
+
+    for (const asOfIso of asOfTimes) {
+      expect(
+        calculateWorkedMinutes(
+          makeShift({ clockIn, lunchStart }),
+          new Date(asOfIso),
+        ),
+      ).toBe(workedBeforeLunch);
+    }
+  });
+
+  test("does not add worked time during an unpaid break", () => {
+    const clockIn = "2026-01-01T09:00:20.000Z";
+    const breakStart = "2026-01-01T09:03:50.000Z";
+    const shift = makeShift({
+      clockIn,
+      breaks: [
+        {
+          id: "b1",
+          start: breakStart,
+          paid: false,
+        },
+      ],
+    });
+
+    const workedBeforeBreak = calculateWorkedMinutes(
+      shift,
+      new Date(breakStart),
+    );
+
+    const asOfTimes = [
+      "2026-01-01T09:04:00.000Z",
+      "2026-01-01T09:04:59.000Z",
+      "2026-01-01T09:05:01.000Z",
+      "2026-01-01T09:08:00.000Z",
+    ];
+
+    for (const asOfIso of asOfTimes) {
+      expect(calculateWorkedMinutes(shift, new Date(asOfIso))).toBe(
+        workedBeforeBreak,
+      );
+    }
   });
 });

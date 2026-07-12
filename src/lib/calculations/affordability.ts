@@ -1,15 +1,25 @@
+import { addDays, endOfMonth, isSameDay, startOfDay } from "date-fns";
+
 import { countWorkdaysInRange } from "@/lib/calculations/dateUtils";
-import { calculateWeeklyPay } from "@/lib/calculations/pay";
+import { calculateWeeklyPay, type PayBreakdown } from "@/lib/calculations/pay";
 import {
     getMonthlyGrossForSalary,
     getSalaryNet,
 } from "@/lib/calculations/salary";
-import { getCurrentMonthRange, getWeekRangeFor } from "@/lib/dates";
+import { getWeekRangeFor } from "@/lib/dates";
 import type { Job, Shift } from "@/lib/types";
 
 export type MonthlyProjection = {
+  actualHours: number;
+  regularEarningsSoFar: number;
+  overtimeEarningsSoFar: number;
   netSoFar: number;
   grossSoFar: number;
+  remainingPlannedWorkdays: number;
+  expectedFutureRegularHours: number;
+  expectedFutureOvertimeHours: number;
+  projectedFutureGross: number;
+  projectedFutureNet: number;
   projectedNet: number;
   projectedGross: number;
 };
@@ -38,19 +48,44 @@ export function groupShiftsByWeek(shifts: Shift[]): Map<string, Shift[]> {
 }
 
 /** Sums estimated net/gross pay for a set of shifts, respecting weekly overtime. */
+function emptyPayBreakdown(): PayBreakdown {
+  return {
+    totalHours: 0,
+    regularHours: 0,
+    overtimeHours: 0,
+    regularEarnings: 0,
+    overtimeEarnings: 0,
+    grossPay: 0,
+    estimatedTaxes: 0,
+    estimatedNetPay: 0,
+  };
+}
+
+function sumPayBreakdownForShifts(shifts: Shift[], asOf: Date): PayBreakdown {
+  const weeks = groupShiftsByWeek(shifts);
+  return Array.from(weeks.values()).reduce<PayBreakdown>(
+    (total, weekShifts) => {
+      const pay = calculateWeeklyPay(weekShifts, asOf);
+      total.totalHours += pay.totalHours;
+      total.regularHours += pay.regularHours;
+      total.overtimeHours += pay.overtimeHours;
+      total.regularEarnings += pay.regularEarnings;
+      total.overtimeEarnings += pay.overtimeEarnings;
+      total.grossPay += pay.grossPay;
+      total.estimatedTaxes += pay.estimatedTaxes;
+      total.estimatedNetPay += pay.estimatedNetPay;
+      return total;
+    },
+    emptyPayBreakdown(),
+  );
+}
+
 export function sumPayForShifts(
   shifts: Shift[],
   asOf: Date = new Date(),
 ): { gross: number; net: number } {
-  const weeks = groupShiftsByWeek(shifts);
-  let gross = 0;
-  let net = 0;
-  for (const weekShifts of weeks.values()) {
-    const pay = calculateWeeklyPay(weekShifts, asOf);
-    gross += pay.grossPay;
-    net += pay.estimatedNetPay;
-  }
-  return { gross, net };
+  const pay = sumPayBreakdownForShifts(shifts, asOf);
+  return { gross: pay.grossPay, net: pay.estimatedNetPay };
 }
 
 function projectIncomeForJob(
@@ -62,31 +97,57 @@ function projectIncomeForJob(
     const gross = getMonthlyGrossForSalary(job);
     const net = getSalaryNet(gross, job.taxPercent);
     return {
+      actualHours: 0,
+      regularEarningsSoFar: gross,
+      overtimeEarningsSoFar: 0,
       netSoFar: net,
       grossSoFar: gross,
+      remainingPlannedWorkdays: 0,
+      expectedFutureRegularHours: 0,
+      expectedFutureOvertimeHours: 0,
+      projectedFutureGross: 0,
+      projectedFutureNet: 0,
       projectedNet: net,
       projectedGross: gross,
     };
   }
 
-  const { start } = getCurrentMonthRange(now);
-  const { gross, net } = sumPayForShifts(shifts, now);
-  const elapsedWorkdays = countWorkdaysInRange(start, now, job.workDaysPerWeek);
-  const workdaysInMonth = countWorkdaysInRange(
-    start,
-    new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    job.workDaysPerWeek,
+  const pay = sumPayBreakdownForShifts(shifts, now);
+  const todayHasShift = shifts.some((shift) =>
+    isSameDay(new Date(shift.clockIn), now),
   );
-  const effectiveElapsed = Math.max(1, elapsedWorkdays);
-  const projectedNet = (net / effectiveElapsed) * workdaysInMonth;
-  const projectedGross = (gross / effectiveElapsed) * workdaysInMonth;
-  return { netSoFar: net, grossSoFar: gross, projectedNet, projectedGross };
+  const futureStart = todayHasShift
+    ? addDays(startOfDay(now), 1)
+    : startOfDay(now);
+  const monthEnd = endOfMonth(now);
+  const remainingPlannedWorkdays =
+    futureStart <= monthEnd
+      ? countWorkdaysInRange(futureStart, monthEnd, job.workDaysPerWeek)
+      : 0;
+  const expectedFutureRegularHours = remainingPlannedWorkdays * 8;
+  const projectedFutureGross = expectedFutureRegularHours * job.hourlyRate;
+  const projectedFutureNet = getSalaryNet(projectedFutureGross, job.taxPercent);
+
+  return {
+    actualHours: pay.totalHours,
+    regularEarningsSoFar: pay.regularEarnings,
+    overtimeEarningsSoFar: pay.overtimeEarnings,
+    netSoFar: pay.estimatedNetPay,
+    grossSoFar: pay.grossPay,
+    remainingPlannedWorkdays,
+    expectedFutureRegularHours,
+    expectedFutureOvertimeHours: 0,
+    projectedFutureGross,
+    projectedFutureNet,
+    projectedNet: pay.estimatedNetPay + projectedFutureNet,
+    projectedGross: pay.grossPay + projectedFutureGross,
+  };
 }
 
 /**
- * Projects income for the current month. For hourly jobs it extrapolates the
- * month-to-date average using the job's configured workdays per week. For
- * salaried jobs it returns the fixed monthly salary net/gross.
+ * Projects income for the current month using a conservative model:
+ * actual earnings so far plus expected future scheduled regular hours.
+ * No future overtime is projected by default.
  */
 export function projectMonthlyIncome(
   monthShifts: Shift[],
@@ -97,23 +158,53 @@ export function projectMonthlyIncome(
   if (selectedJobId && selectedJobId !== "all") {
     const job = jobs.find((j) => j.id === selectedJobId);
     if (!job) {
-      return { netSoFar: 0, grossSoFar: 0, projectedNet: 0, projectedGross: 0 };
+      return {
+        actualHours: 0,
+        regularEarningsSoFar: 0,
+        overtimeEarningsSoFar: 0,
+        netSoFar: 0,
+        grossSoFar: 0,
+        remainingPlannedWorkdays: 0,
+        expectedFutureRegularHours: 0,
+        expectedFutureOvertimeHours: 0,
+        projectedFutureGross: 0,
+        projectedFutureNet: 0,
+        projectedNet: 0,
+        projectedGross: 0,
+      };
     }
     const shifts = monthShifts.filter((s) => s.jobId === job.id);
     return projectIncomeForJob(job, shifts, now);
   }
 
-  const result = {
+  const result: MonthlyProjection = {
+    actualHours: 0,
+    regularEarningsSoFar: 0,
+    overtimeEarningsSoFar: 0,
     netSoFar: 0,
     grossSoFar: 0,
+    remainingPlannedWorkdays: 0,
+    expectedFutureRegularHours: 0,
+    expectedFutureOvertimeHours: 0,
+    projectedFutureGross: 0,
+    projectedFutureNet: 0,
     projectedNet: 0,
     projectedGross: 0,
   };
   for (const job of jobs) {
     const shifts = monthShifts.filter((s) => s.jobId === job.id);
     const projection = projectIncomeForJob(job, shifts, now);
+    result.actualHours += projection.actualHours;
+    result.regularEarningsSoFar += projection.regularEarningsSoFar;
+    result.overtimeEarningsSoFar += projection.overtimeEarningsSoFar;
     result.netSoFar += projection.netSoFar;
     result.grossSoFar += projection.grossSoFar;
+    result.remainingPlannedWorkdays += projection.remainingPlannedWorkdays;
+    result.expectedFutureRegularHours += projection.expectedFutureRegularHours;
+    result.expectedFutureOvertimeHours +=
+      projection.expectedFutureOvertimeHours;
+    result.projectedFutureGross += projection.projectedFutureGross;
+    result.projectedFutureNet += projection.projectedFutureNet;
     result.projectedNet += projection.projectedNet;
     result.projectedGross += projection.projectedGross;
   }

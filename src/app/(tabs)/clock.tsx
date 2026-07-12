@@ -11,7 +11,6 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Select } from "@/components/ui/Select";
 import { getJobs } from "@/db/queries/jobQueries";
 import { useActiveShift } from "@/features/clock/useActiveShift";
-import { useClockedInNotification } from "@/features/clock/useClockedInNotification";
 import { useRecentShifts } from "@/features/clock/useShifts";
 import { useNowTicker } from "@/hooks/useNowTicker";
 import type { Job, Shift } from "@/lib/types";
@@ -58,12 +57,7 @@ export default function ClockScreen() {
     [hourlyJobs],
   );
   const activeJobName = shift ? jobNameById[shift.jobId] : undefined;
-  const targetJobName = active
-    ? activeJobName
-    : jobNameById[selectedJobId ?? ""];
   const displayJobId = active ? shift?.jobId : selectedJobId;
-
-  useClockedInNotification(shift, status, targetJobName);
 
   const jobOptions = hourlyJobs.map((j) => ({ label: j.name, value: j.id }));
 
@@ -78,7 +72,7 @@ export default function ClockScreen() {
 
   return (
     <Screen showLogo>
-      <ClockStatusCard shift={shift} status={status} jobName={targetJobName} />
+      <ClockStatusCard shift={shift} status={status} jobName={activeJobName} />
       {hourlyJobs.length === 0 ? (
         <Text
           style={[

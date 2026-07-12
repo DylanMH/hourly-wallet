@@ -4,26 +4,38 @@ import { StyleSheet, Text, View } from "react-native";
 import { Card } from "@/components/ui/Card";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import type { MonthlyAffordability } from "@/lib/calculations/affordability";
+import type {
+    MonthlyAffordability,
+    MonthlyProjection,
+} from "@/lib/calculations/affordability";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/typography";
 import { useTheme } from "@/theme/useTheme";
 
 type MonthlyAffordabilityCardProps = {
   affordability: MonthlyAffordability;
-  netSoFar: number;
+  projection: MonthlyProjection;
   billsPaid: number;
   billsRemaining: number;
 };
 
 export function MonthlyAffordabilityCard({
   affordability,
-  netSoFar,
+  projection,
   billsPaid,
   billsRemaining,
 }: MonthlyAffordabilityCardProps) {
   const { colors } = useTheme();
   const { status, projectedNet, totalBillsDue, surplus } = affordability;
+  const {
+    regularEarningsSoFar,
+    overtimeEarningsSoFar,
+    netSoFar,
+    projectedFutureNet,
+    projectedGross,
+  } = projection;
+
+  const hasOvertime = overtimeEarningsSoFar > 0;
 
   const meta = {
     "on-track": {
@@ -68,14 +80,23 @@ export function MonthlyAffordabilityCard({
         {meta.message}
       </Text>
       <ProgressBar progress={coverage} tone={meta.tone} />
+
       <View style={styles.row}>
         <View style={styles.item}>
           <Text
             style={[typography.captionMedium, { color: colors.textSecondary }]}
           >
-            Net so far
+            Earned so far
           </Text>
-          <MoneyText amount={netSoFar} size="md" />
+          <MoneyText amount={netSoFar} size="md" tone="positive" />
+        </View>
+        <View style={styles.item}>
+          <Text
+            style={[typography.captionMedium, { color: colors.textSecondary }]}
+          >
+            Projected remaining
+          </Text>
+          <MoneyText amount={projectedFutureNet} size="md" />
         </View>
         <View style={styles.item}>
           <Text
@@ -85,16 +106,51 @@ export function MonthlyAffordabilityCard({
           </Text>
           <MoneyText amount={projectedNet} size="md" />
         </View>
+      </View>
+
+      <View style={styles.row}>
         <View style={styles.item}>
           <Text
             style={[typography.captionMedium, { color: colors.textSecondary }]}
           >
-            Bills needed
+            Regular earned
+          </Text>
+          <MoneyText amount={regularEarningsSoFar} size="md" />
+        </View>
+        {hasOvertime && (
+          <View style={styles.item}>
+            <Text
+              style={[
+                typography.captionMedium,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Overtime earned
+            </Text>
+            <MoneyText amount={overtimeEarningsSoFar} size="md" />
+          </View>
+        )}
+        <View style={styles.item}>
+          <Text
+            style={[typography.captionMedium, { color: colors.textSecondary }]}
+          >
+            Projected gross
+          </Text>
+          <MoneyText amount={projectedGross} size="md" />
+        </View>
+      </View>
+
+      <View style={styles.divider} />
+
+      <View style={styles.row}>
+        <View style={styles.item}>
+          <Text
+            style={[typography.captionMedium, { color: colors.textSecondary }]}
+          >
+            Bills total
           </Text>
           <MoneyText amount={totalBillsDue} size="md" tone="warning" />
         </View>
-      </View>
-      <View style={styles.row}>
         <View style={styles.item}>
           <Text
             style={[typography.captionMedium, { color: colors.textSecondary }]}
@@ -111,11 +167,14 @@ export function MonthlyAffordabilityCard({
           </Text>
           <MoneyText amount={billsRemaining} size="md" tone="warning" />
         </View>
+      </View>
+
+      <View style={styles.row}>
         <View style={styles.item}>
           <Text
             style={[typography.captionMedium, { color: colors.textSecondary }]}
           >
-            {surplus >= 0 ? "Surplus" : "Shortfall"}
+            {surplus >= 0 ? "Projected surplus" : "Projected shortfall"}
           </Text>
           <MoneyText
             amount={surplus}
@@ -136,11 +195,16 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
-    gap: spacing.lg,
+    gap: spacing.md,
     marginTop: spacing.sm,
   },
   item: {
     flex: 1,
     gap: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginVertical: spacing.sm,
   },
 });

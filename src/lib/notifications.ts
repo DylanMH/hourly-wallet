@@ -1,15 +1,26 @@
 import notifee, {
-  AndroidImportance,
-  AndroidVisibility,
-  AuthorizationStatus,
-  type NotificationSettings,
+    AndroidImportance,
+    AndroidVisibility,
+    AuthorizationStatus,
+    EventType,
+    type NotificationSettings,
 } from "@notifee/react-native";
 import { parseISO, setHours, setMinutes, subDays } from "date-fns";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-import { formatTime } from "@/lib/dates";
-import { formatCurrency } from "@/lib/money";
+import {
+    clockOut,
+    endBreak,
+    endLunch,
+    startBreak,
+    startLunch,
+} from "@/features/clock/clockService";
+import {
+    calculateWorkedHours,
+    calculateWorkedMinutes,
+} from "@/lib/calculations/shifts";
+import { formatCurrency, formatHoursMinutes } from "@/lib/money";
 import type { Bill, BillOccurrence, ClockStatus, Shift } from "@/lib/types";
 
 export async function requestNotificationPermission(): Promise<boolean> {
@@ -63,7 +74,8 @@ export async function cancelBillReminder(
 }
 
 const CLOCK_CHANNEL_ID = "clock-status";
-const CLOCK_NOTIFICATION_ID = "clock-status";
+let currentNotificationId = "clock-status";
+let notificationCounter = 0;
 
 function titleForStatus(status: ClockStatus): string {
   switch (status) {
@@ -77,30 +89,33 @@ function titleForStatus(status: ClockStatus): string {
   }
 }
 
-function timestampForStatus(status: ClockStatus, shift: Shift): number {
-  if (status === "on-lunch" && shift.lunchStart) {
-    return new Date(shift.lunchStart).getTime();
-  }
-  if (status === "on-break") {
-    const activeBreak = shift.breaks.find((b) => !b.end);
-    if (activeBreak) {
-      return new Date(activeBreak.start).getTime();
-    }
-  }
-  return new Date(shift.clockIn).getTime();
-}
-
 function bodyForStatus(status: ClockStatus, shift: Shift): string {
-  if (status === "on-lunch" && shift.lunchStart) {
-    return `Lunch started at ${formatTime(shift.lunchStart)}`;
+  const now = new Date();
+  const workedMins = calculateWorkedMinutes(shift, now);
+  const workedStr = `${formatHoursMinutes(workedMins)} worked`;
+  const earned = calculateWorkedHours(shift, now) * shift.hourlyRateSnapshot;
+  const earnedStr = `~${formatCurrency(earned)} earned`;
+
+  if (status === "on-lunch") {
+    const activeLunch = shift.lunches.find((l) => !l.end);
+    if (activeLunch) {
+      const lunchMins = Math.floor(
+        (now.getTime() - new Date(activeLunch.start).getTime()) / 60000,
+      );
+      return `${formatHoursMinutes(lunchMins)} on lunch · ${workedStr} · ${earnedStr}`;
+    }
   }
   if (status === "on-break") {
     const activeBreak = shift.breaks.find((b) => !b.end);
     if (activeBreak) {
-      return `Break started at ${formatTime(activeBreak.start)}`;
+      const breakMins = Math.floor(
+        (now.getTime() - new Date(activeBreak.start).getTime()) / 60000,
+      );
+      const paidLabel = activeBreak.paid ? " (paid)" : " (unpaid)";
+      return `${formatHoursMinutes(breakMins)} on break${paidLabel} · ${workedStr} · ${earnedStr}`;
     }
   }
-  return `Started at ${formatTime(shift.clockIn)}`;
+  return `${workedStr} · ${earnedStr}`;
 }
 
 async function ensureClockChannel(): Promise<void> {
@@ -123,10 +138,51 @@ let stopForegroundServiceResolver: (() => void) | null = null;
 let activeShift: Shift | null = null;
 let activeStatus: ClockStatus = "clocked-in";
 
-async function displayClockNotification(): Promise<void> {
+function actionsForStatus(status: ClockStatus) {
+  switch (status) {
+    case "clocked-in":
+      return [
+        {
+          title: "Lunch",
+          id: "start-lunch",
+          pressAction: { id: "start-lunch" },
+        },
+        {
+          title: "Break",
+          id: "start-break",
+          pressAction: { id: "start-break" },
+        },
+        {
+          title: "Clock Out",
+          id: "clock-out",
+          pressAction: { id: "clock-out" },
+        },
+      ];
+    case "on-lunch":
+      return [
+        {
+          title: "End Lunch",
+          id: "end-lunch",
+          pressAction: { id: "end-lunch" },
+        },
+      ];
+    case "on-break":
+      return [
+        {
+          title: "End Break",
+          id: "end-break",
+          pressAction: { id: "end-break" },
+        },
+      ];
+    default:
+      return [];
+  }
+}
+
+async function displayClockNotification(id: string): Promise<void> {
   if (!activeShift) return;
   await notifee.displayNotification({
-    id: CLOCK_NOTIFICATION_ID,
+    id,
     title: titleForStatus(activeStatus),
     body: bodyForStatus(activeStatus, activeShift),
     android: {
@@ -136,17 +192,12 @@ async function displayClockNotification(): Promise<void> {
       autoCancel: false,
       onlyAlertOnce: true,
       pressAction: { id: "default" },
-      showChronometer: true,
-      chronometerDirection: "up",
-      showTimestamp: false,
-      timestamp: timestampForStatus(activeStatus, activeShift),
+      actions: actionsForStatus(activeStatus),
     },
   });
 }
 
-export async function dismissClockedInNotification(
-  _notificationId?: string,
-): Promise<void> {
+export async function dismissClockedInNotification(): Promise<void> {
   try {
     activeShift = null;
     if (Platform.OS === "android" && stopForegroundServiceResolver) {
@@ -154,7 +205,9 @@ export async function dismissClockedInNotification(
       stopForegroundServiceResolver = null;
     }
     await notifee.stopForegroundService();
-    await notifee.cancelNotification(CLOCK_NOTIFICATION_ID);
+    await notifee.cancelNotification(currentNotificationId);
+    currentNotificationId = "clock-status";
+    notificationCounter = 0;
   } catch {
     // Ignore dismiss failures.
   }
@@ -172,22 +225,40 @@ export async function showClockedInNotification(
     activeStatus = status;
 
     await ensureClockChannel();
-    await displayClockNotification();
-    return CLOCK_NOTIFICATION_ID;
+    await displayClockNotification(currentNotificationId);
+    return currentNotificationId;
   } catch {
     return null;
   }
 }
 
 export async function updateClockedInNotification(
-  _notificationId: string,
   shift: Shift,
   status: ClockStatus,
 ): Promise<void> {
   try {
+    const statusChanged = activeStatus !== status;
     activeShift = shift;
     activeStatus = status;
-    await displayClockNotification();
+
+    if (statusChanged) {
+      // Use a fresh notification ID so Android creates a completely new
+      // notification with a fresh chronometer, rather than trying to update
+      // the base timestamp on the existing one (which Android ignores).
+      const oldId = currentNotificationId;
+      notificationCounter += 1;
+      currentNotificationId = `clock-status-${notificationCounter}`;
+
+      if (stopForegroundServiceResolver) {
+        stopForegroundServiceResolver();
+        stopForegroundServiceResolver = null;
+      }
+      await notifee.stopForegroundService();
+      await notifee.cancelNotification(oldId);
+      await displayClockNotification(currentNotificationId);
+    } else {
+      await displayClockNotification(currentNotificationId);
+    }
   } catch {
     // Ignore update failures.
   }
@@ -201,5 +272,35 @@ if (Platform.OS === "android") {
     return new Promise((resolve) => {
       stopForegroundServiceResolver = resolve;
     });
+  });
+
+  notifee.onBackgroundEvent(async ({ type, detail }) => {
+    // Only handle press actions, not dismissal or other events.
+    if (type !== EventType.PRESS) return;
+
+    const pressId = detail.pressAction?.id;
+    try {
+      switch (pressId) {
+        case "start-lunch":
+          await startLunch();
+          break;
+        case "end-lunch":
+          await endLunch();
+          break;
+        case "start-break":
+          await startBreak();
+          break;
+        case "end-break":
+          await endBreak();
+          break;
+        case "clock-out":
+          await clockOut({ autoCloseActive: true });
+          break;
+        default:
+          return;
+      }
+    } catch {
+      // Errors from invalid state transitions are expected — ignore silently.
+    }
   });
 }

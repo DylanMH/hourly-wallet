@@ -1,24 +1,33 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { SQLiteDatabase } from "expo-sqlite";
 
-import { CREATE_TABLES_V1 } from '@/db/schema';
+import { CREATE_TABLES_V1 } from "@/db/schema";
+import { generateId } from "@/lib/ids";
 
-export const DATABASE_VERSION = 6;
+export const DATABASE_VERSION = 7;
 
 async function tableExists(db: SQLiteDatabase, name: string): Promise<boolean> {
   const row = await db.getFirstAsync<{ name: string }>(
     `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
-    name
+    name,
   );
   return row != null;
 }
 
-async function columnExists(db: SQLiteDatabase, table: string, column: string): Promise<boolean> {
-  const rows = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+async function columnExists(
+  db: SQLiteDatabase,
+  table: string,
+  column: string,
+): Promise<boolean> {
+  const rows = await db.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(${table})`,
+  );
   return rows.some((r) => r.name === column);
 }
 
 export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
-  const result = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+  const result = await db.getFirstAsync<{ user_version: number }>(
+    "PRAGMA user_version",
+  );
   let currentVersion = result?.user_version ?? 0;
 
   if (currentVersion >= DATABASE_VERSION) {
@@ -36,41 +45,47 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
   }
 
   if (currentVersion === 1) {
-    if (!(await columnExists(db, 'pay_settings', 'holiday_pay_in_overtime'))) {
+    if (!(await columnExists(db, "pay_settings", "holiday_pay_in_overtime"))) {
       await db.execAsync(
-        `ALTER TABLE pay_settings ADD COLUMN holiday_pay_in_overtime INTEGER NOT NULL DEFAULT 0;`
+        `ALTER TABLE pay_settings ADD COLUMN holiday_pay_in_overtime INTEGER NOT NULL DEFAULT 0;`,
       );
     }
-    if (!(await columnExists(db, 'shifts', 'is_holiday_pay'))) {
-      await db.execAsync(`ALTER TABLE shifts ADD COLUMN is_holiday_pay INTEGER NOT NULL DEFAULT 0;`);
-    }
-    if (!(await columnExists(db, 'shifts', 'holiday_pay_in_overtime_snapshot'))) {
+    if (!(await columnExists(db, "shifts", "is_holiday_pay"))) {
       await db.execAsync(
-        `ALTER TABLE shifts ADD COLUMN holiday_pay_in_overtime_snapshot INTEGER NOT NULL DEFAULT 0;`
+        `ALTER TABLE shifts ADD COLUMN is_holiday_pay INTEGER NOT NULL DEFAULT 0;`,
+      );
+    }
+    if (
+      !(await columnExists(db, "shifts", "holiday_pay_in_overtime_snapshot"))
+    ) {
+      await db.execAsync(
+        `ALTER TABLE shifts ADD COLUMN holiday_pay_in_overtime_snapshot INTEGER NOT NULL DEFAULT 0;`,
       );
     }
     currentVersion = 2;
   }
 
   if (currentVersion === 2) {
-    if (!(await columnExists(db, 'pay_settings', 'allow_pto_in_overtime'))) {
+    if (!(await columnExists(db, "pay_settings", "allow_pto_in_overtime"))) {
       await db.execAsync(
-        `ALTER TABLE pay_settings ADD COLUMN allow_pto_in_overtime INTEGER NOT NULL DEFAULT 0;`
+        `ALTER TABLE pay_settings ADD COLUMN allow_pto_in_overtime INTEGER NOT NULL DEFAULT 0;`,
       );
     }
-    if (!(await columnExists(db, 'shifts', 'is_pto'))) {
-      await db.execAsync(`ALTER TABLE shifts ADD COLUMN is_pto INTEGER NOT NULL DEFAULT 0;`);
-    }
-    if (!(await columnExists(db, 'shifts', 'pto_in_overtime_snapshot'))) {
+    if (!(await columnExists(db, "shifts", "is_pto"))) {
       await db.execAsync(
-        `ALTER TABLE shifts ADD COLUMN pto_in_overtime_snapshot INTEGER NOT NULL DEFAULT 0;`
+        `ALTER TABLE shifts ADD COLUMN is_pto INTEGER NOT NULL DEFAULT 0;`,
+      );
+    }
+    if (!(await columnExists(db, "shifts", "pto_in_overtime_snapshot"))) {
+      await db.execAsync(
+        `ALTER TABLE shifts ADD COLUMN pto_in_overtime_snapshot INTEGER NOT NULL DEFAULT 0;`,
       );
     }
     currentVersion = 3;
   }
 
   if (currentVersion === 3) {
-    const jobsExists = await tableExists(db, 'jobs');
+    const jobsExists = await tableExists(db, "jobs");
     if (!jobsExists) {
       await db.execAsync(`
         CREATE TABLE jobs (
@@ -95,7 +110,10 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
       `);
     }
 
-    const hasDefaultJob = await db.getFirstAsync('SELECT 1 FROM jobs WHERE id = ?', 'default');
+    const hasDefaultJob = await db.getFirstAsync(
+      "SELECT 1 FROM jobs WHERE id = ?",
+      "default",
+    );
     if (!hasDefaultJob) {
       await db.execAsync(`
         INSERT INTO jobs (
@@ -113,25 +131,37 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
       `);
     }
 
-    if (!(await columnExists(db, 'shifts', 'job_id'))) {
-      await db.execAsync(`ALTER TABLE shifts ADD COLUMN job_id TEXT NOT NULL DEFAULT 'default';`);
+    if (!(await columnExists(db, "shifts", "job_id"))) {
+      await db.execAsync(
+        `ALTER TABLE shifts ADD COLUMN job_id TEXT NOT NULL DEFAULT 'default';`,
+      );
     }
-    await db.execAsync(`CREATE INDEX IF NOT EXISTS idx_shifts_job_id ON shifts(job_id);`);
+    await db.execAsync(
+      `CREATE INDEX IF NOT EXISTS idx_shifts_job_id ON shifts(job_id);`,
+    );
     currentVersion = 4;
   }
 
   if (currentVersion === 4) {
-    if (!(await columnExists(db, 'jobs', 'is_salaried'))) {
-      await db.execAsync(`ALTER TABLE jobs ADD COLUMN is_salaried INTEGER NOT NULL DEFAULT 0;`);
+    if (!(await columnExists(db, "jobs", "is_salaried"))) {
+      await db.execAsync(
+        `ALTER TABLE jobs ADD COLUMN is_salaried INTEGER NOT NULL DEFAULT 0;`,
+      );
     }
-    if (!(await columnExists(db, 'jobs', 'salary_amount'))) {
-      await db.execAsync(`ALTER TABLE jobs ADD COLUMN salary_amount REAL NOT NULL DEFAULT 0;`);
+    if (!(await columnExists(db, "jobs", "salary_amount"))) {
+      await db.execAsync(
+        `ALTER TABLE jobs ADD COLUMN salary_amount REAL NOT NULL DEFAULT 0;`,
+      );
     }
-    if (!(await columnExists(db, 'jobs', 'salary_period'))) {
-      await db.execAsync(`ALTER TABLE jobs ADD COLUMN salary_period TEXT NOT NULL DEFAULT 'monthly';`);
+    if (!(await columnExists(db, "jobs", "salary_period"))) {
+      await db.execAsync(
+        `ALTER TABLE jobs ADD COLUMN salary_period TEXT NOT NULL DEFAULT 'monthly';`,
+      );
     }
-    if (!(await columnExists(db, 'jobs', 'work_days_per_week'))) {
-      await db.execAsync(`ALTER TABLE jobs ADD COLUMN work_days_per_week INTEGER NOT NULL DEFAULT 5;`);
+    if (!(await columnExists(db, "jobs", "work_days_per_week"))) {
+      await db.execAsync(
+        `ALTER TABLE jobs ADD COLUMN work_days_per_week INTEGER NOT NULL DEFAULT 5;`,
+      );
     }
     currentVersion = 5;
   }
@@ -155,6 +185,38 @@ export async function migrateDbIfNeeded(db: SQLiteDatabase): Promise<void> {
         ON bill_occurrences(bill_id, due_date);
     `);
     currentVersion = 6;
+  }
+
+  if (currentVersion === 6) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS shift_lunches (
+        id TEXT PRIMARY KEY NOT NULL,
+        shift_id TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+        start TEXT NOT NULL,
+        end TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_shift_lunches_shift_id ON shift_lunches(shift_id);
+    `);
+
+    // Migrate legacy lunch columns into the new lunches table.
+    const legacyLunches = await db.getAllAsync<{
+      id: string;
+      lunch_start: string;
+      lunch_end: string | null;
+    }>(
+      "SELECT id, lunch_start, lunch_end FROM shifts WHERE lunch_start IS NOT NULL",
+    );
+    for (const row of legacyLunches) {
+      await db.runAsync(
+        "INSERT INTO shift_lunches (id, shift_id, start, end) VALUES (?, ?, ?, ?)",
+        generateId(),
+        row.id,
+        row.lunch_start,
+        row.lunch_end,
+      );
+    }
+
+    currentVersion = 7;
   }
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);

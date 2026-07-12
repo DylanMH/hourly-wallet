@@ -39,7 +39,6 @@ export type DashboardData = {
   weeklyPay: ReturnType<typeof calculateWeeklyPay>;
   monthlyProjection: ReturnType<typeof projectMonthlyIncome>;
   affordability: ReturnType<typeof calculateMonthlyAffordability>;
-  netSoFar: number;
   totalBillsDue: number;
   billsPaidAmount: number;
   billsRemainingAmount: number;
@@ -129,6 +128,8 @@ export function useDashboardData(selectedJobId: string): DashboardData {
         totalHours: 0,
         regularHours: 0,
         overtimeHours: 0,
+        regularEarnings: 0,
+        overtimeEarnings: 0,
         grossPay: 0,
         estimatedTaxes: 0,
         estimatedNetPay: 0,
@@ -138,6 +139,8 @@ export function useDashboardData(selectedJobId: string): DashboardData {
           const salary = calculateWeeklyPayForSalary(job);
           acc.totalHours += salary.totalHours;
           acc.regularHours += salary.regularHours;
+          acc.regularEarnings += salary.regularEarnings;
+          acc.overtimeEarnings += salary.overtimeEarnings;
           acc.grossPay += salary.grossPay;
           acc.estimatedTaxes += salary.estimatedTaxes;
           acc.estimatedNetPay += salary.estimatedNetPay;
@@ -147,6 +150,8 @@ export function useDashboardData(selectedJobId: string): DashboardData {
           acc.totalHours += pay.totalHours;
           acc.regularHours += pay.regularHours;
           acc.overtimeHours += pay.overtimeHours;
+          acc.regularEarnings += pay.regularEarnings;
+          acc.overtimeEarnings += pay.overtimeEarnings;
           acc.grossPay += pay.grossPay;
           acc.estimatedTaxes += pay.estimatedTaxes;
           acc.estimatedNetPay += pay.estimatedNetPay;
@@ -200,7 +205,6 @@ export function useDashboardData(selectedJobId: string): DashboardData {
     weeklyPay,
     monthlyProjection,
     affordability,
-    netSoFar: monthlyProjection.netSoFar,
     totalBillsDue,
     billsPaidAmount,
     billsRemainingAmount,

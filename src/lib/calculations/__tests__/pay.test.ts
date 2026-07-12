@@ -8,13 +8,12 @@ function makeShift(
   partial: Partial<Shift> & { clockIn: string; clockOut?: string },
 ): Shift {
   return {
-    id: "shift-1",
+    id: partial.id ?? partial.clockIn,
     jobId: "job-1",
     date: "2026-01-01",
     clockIn: partial.clockIn,
     clockOut: partial.clockOut,
-    lunchStart: partial.lunchStart,
-    lunchEnd: partial.lunchEnd,
+    lunches: [],
     breaks: partial.breaks ?? [],
     notes: undefined,
     isHolidayPay: false,

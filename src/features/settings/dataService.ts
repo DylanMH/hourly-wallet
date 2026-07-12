@@ -1,17 +1,34 @@
-import { z } from 'zod';
+import { z } from "zod";
 
-import { getDatabase } from '@/db/database';
+import { getDatabase } from "@/db/database";
 import {
-  getAllOccurrences,
-  getBills,
-  insertBill,
-  insertOccurrence,
-} from '@/db/queries/billQueries';
-import { getPaySettings, updatePaySettings } from '@/db/queries/settingsQueries';
-import { getAllShifts, insertShift } from '@/db/queries/shiftQueries';
-import { getJobs, insertJob, ensureDefaultJob } from '@/db/queries/jobQueries';
-import type { Bill, BillCategory, BillOccurrence, BillRecurrence, Job, Shift } from '@/lib/types';
-import { useAppStore } from '@/state/appStore';
+    getAllOccurrences,
+    getBills,
+    insertBill,
+    insertOccurrence,
+} from "@/db/queries/billQueries";
+import { ensureDefaultJob, getJobs, insertJob } from "@/db/queries/jobQueries";
+import {
+    getPaySettings,
+    updatePaySettings,
+} from "@/db/queries/settingsQueries";
+import { getAllShifts, insertShift } from "@/db/queries/shiftQueries";
+import { generateId } from "@/lib/ids";
+import type {
+    Bill,
+    BillCategory,
+    BillOccurrence,
+    BillRecurrence,
+    Job,
+    Shift,
+} from "@/lib/types";
+import { useAppStore } from "@/state/appStore";
+
+const shiftLunchSchema = z.object({
+  id: z.string(),
+  start: z.string(),
+  end: z.string().optional(),
+});
 
 const shiftBreakSchema = z.object({
   id: z.string(),
@@ -22,12 +39,13 @@ const shiftBreakSchema = z.object({
 
 const shiftSchema = z.object({
   id: z.string(),
-  jobId: z.string().default('default'),
+  jobId: z.string().default("default"),
   date: z.string(),
   clockIn: z.string(),
   clockOut: z.string().optional(),
   lunchStart: z.string().optional(),
   lunchEnd: z.string().optional(),
+  lunches: z.array(shiftLunchSchema).default([]),
   breaks: z.array(shiftBreakSchema),
   notes: z.string().optional(),
   isHolidayPay: z.boolean().default(false),
@@ -48,7 +66,7 @@ const billSchema = z.object({
   name: z.string(),
   amount: z.number(),
   category: z.string(),
-  recurrence: z.enum(['one-time', 'weekly', 'biweekly', 'monthly', 'yearly']),
+  recurrence: z.enum(["one-time", "weekly", "biweekly", "monthly", "yearly"]),
   dueDay: z.number().optional(),
   dueDate: z.string().optional(),
   autopay: z.boolean(),
@@ -84,7 +102,7 @@ const settingsSchema = z.object({
   breakPaidByDefault: z.boolean(),
   holidayPayInOvertime: z.boolean().default(false),
   allowPTOInOvertime: z.boolean().default(false),
-  payPeriod: z.enum(['weekly', 'biweekly', 'semi-monthly', 'monthly']),
+  payPeriod: z.enum(["weekly", "biweekly", "semi-monthly", "monthly"]),
 });
 
 const jobSchema = z.object({
@@ -93,7 +111,7 @@ const jobSchema = z.object({
   isDefault: z.boolean(),
   isSalaried: z.boolean().default(false),
   salaryAmount: z.number().default(0),
-  salaryPeriod: z.enum(['monthly', 'yearly']).default('monthly'),
+  salaryPeriod: z.enum(["monthly", "yearly"]).default("monthly"),
   hourlyRate: z.number(),
   overtimeEnabled: z.boolean(),
   overtimeMultiplier: z.number(),
@@ -104,15 +122,15 @@ const jobSchema = z.object({
   breakPaidByDefault: z.boolean(),
   holidayPayInOvertime: z.boolean().default(false),
   allowPTOInOvertime: z.boolean().default(false),
-  payPeriod: z.enum(['weekly', 'biweekly', 'semi-monthly', 'monthly']),
+  payPeriod: z.enum(["weekly", "biweekly", "semi-monthly", "monthly"]),
   workDaysPerWeek: z.number().default(5),
-  currency: z.literal('USD').default('USD'),
+  currency: z.literal("USD").default("USD"),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 
 const backupSchema = z.object({
-  app: z.literal('hourly-wallet'),
+  app: z.literal("hourly-wallet"),
   version: z.number(),
   exportedAt: z.string(),
   settings: settingsSchema,
@@ -132,7 +150,7 @@ export async function exportData(): Promise<string> {
   const billOccurrences = await getAllOccurrences();
 
   const backup: Backup = {
-    app: 'hourly-wallet',
+    app: "hourly-wallet",
     version: 2,
     exportedAt: new Date().toISOString(),
     settings: {
@@ -162,11 +180,11 @@ export function validateBackup(json: string): Backup {
   try {
     parsed = JSON.parse(json);
   } catch {
-    throw new Error('Not valid JSON.');
+    throw new Error("Not valid JSON.");
   }
   const result = backupSchema.safeParse(parsed);
   if (!result.success) {
-    throw new Error('This does not look like a Hourly Wallet backup.');
+    throw new Error("This does not look like a Hourly Wallet backup.");
   }
   return result.data;
 }
@@ -175,7 +193,7 @@ export function validateBackup(json: string): Backup {
 export async function importData(backup: Backup): Promise<void> {
   const db = getDatabase();
   await db.execAsync(
-    'DELETE FROM shift_breaks; DELETE FROM shifts; DELETE FROM jobs; DELETE FROM bill_occurrences; DELETE FROM bills;'
+    "DELETE FROM shift_lunches; DELETE FROM shift_breaks; DELETE FROM shifts; DELETE FROM jobs; DELETE FROM bill_occurrences; DELETE FROM bills;",
   );
   await updatePaySettings(backup.settings);
 
@@ -185,9 +203,20 @@ export async function importData(backup: Backup): Promise<void> {
   const defaultJob = await ensureDefaultJob();
 
   for (const shift of backup.shifts) {
+    const lunches =
+      shift.lunches.length > 0 || !shift.lunchStart
+        ? shift.lunches
+        : [
+            {
+              id: generateId(),
+              start: shift.lunchStart,
+              end: shift.lunchEnd,
+            },
+          ];
     await insertShift({
       ...(shift as Shift),
       jobId: shift.jobId || defaultJob.id,
+      lunches,
     });
   }
   for (const bill of backup.bills) {
@@ -212,7 +241,7 @@ export async function importData(backup: Backup): Promise<void> {
 export async function resetAllData(): Promise<void> {
   const db = getDatabase();
   await db.execAsync(
-    'DELETE FROM shift_breaks; DELETE FROM shifts; DELETE FROM bill_occurrences; DELETE FROM bills;'
+    "DELETE FROM shift_breaks; DELETE FROM shifts; DELETE FROM bill_occurrences; DELETE FROM bills;",
   );
   const store = useAppStore.getState();
   store.bumpSettings();

@@ -1,5 +1,5 @@
-export type PayPeriod = 'weekly' | 'biweekly' | 'semi-monthly' | 'monthly';
-export type SalaryPeriod = 'monthly' | 'yearly';
+export type PayPeriod = "weekly" | "biweekly" | "semi-monthly" | "monthly";
+export type SalaryPeriod = "monthly" | "yearly";
 
 export type Job = {
   id: string;
@@ -20,7 +20,7 @@ export type Job = {
   allowPTOInOvertime: boolean;
   payPeriod: PayPeriod;
   workDaysPerWeek: number;
-  currency: 'USD';
+  currency: "USD";
   createdAt: string;
   updatedAt: string;
 };
@@ -38,7 +38,7 @@ export type PaySettings = {
   holidayPayInOvertime: boolean;
   allowPTOInOvertime: boolean;
   payPeriod: PayPeriod;
-  currency: 'USD';
+  currency: "USD";
   createdAt: string;
   updatedAt: string;
 };
@@ -50,14 +50,19 @@ export type ShiftBreak = {
   paid: boolean;
 };
 
+export type ShiftLunch = {
+  id: string;
+  start: string;
+  end?: string;
+};
+
 export type Shift = {
   id: string;
   jobId: string;
   date: string;
   clockIn: string;
   clockOut?: string;
-  lunchStart?: string;
-  lunchEnd?: string;
+  lunches: ShiftLunch[];
   breaks: ShiftBreak[];
   notes?: string;
   isHolidayPay: boolean;
@@ -74,45 +79,41 @@ export type Shift = {
 };
 
 export type BillCategory =
-  | 'Mortgage / Rent'
-  | 'Car'
-  | 'Insurance'
-  | 'Phone'
-  | 'Internet'
-  | 'Utilities'
-  | 'Credit Card'
-  | 'Food'
-  | 'Subscription'
-  | 'Loan'
-  | 'Other';
+  | "Mortgage / Rent"
+  | "Car"
+  | "Insurance"
+  | "Phone"
+  | "Internet"
+  | "Utilities"
+  | "Credit Card"
+  | "Food"
+  | "Subscription"
+  | "Loan"
+  | "Other";
 
 export const BILL_CATEGORIES: BillCategory[] = [
-  'Mortgage / Rent',
-  'Car',
-  'Insurance',
-  'Phone',
-  'Internet',
-  'Utilities',
-  'Credit Card',
-  'Food',
-  'Subscription',
-  'Loan',
-  'Other',
+  "Mortgage / Rent",
+  "Car",
+  "Insurance",
+  "Phone",
+  "Internet",
+  "Utilities",
+  "Credit Card",
+  "Food",
+  "Subscription",
+  "Loan",
+  "Other",
 ];
 
 export type BillRecurrence =
-  | 'one-time'
-  | 'weekly'
-  | 'biweekly'
-  | 'monthly'
-  | 'yearly';
+  "one-time" | "weekly" | "biweekly" | "monthly" | "yearly";
 
 export const BILL_RECURRENCES: BillRecurrence[] = [
-  'one-time',
-  'weekly',
-  'biweekly',
-  'monthly',
-  'yearly',
+  "one-time",
+  "weekly",
+  "biweekly",
+  "monthly",
+  "yearly",
 ];
 
 export type Bill = {
@@ -149,6 +150,7 @@ export type BillOccurrenceWithBill = BillOccurrence & {
   bill: Bill;
 };
 
-export type ClockStatus = 'not-clocked-in' | 'clocked-in' | 'on-lunch' | 'on-break';
+export type ClockStatus =
+  "not-clocked-in" | "clocked-in" | "on-lunch" | "on-break";
 
-export type ThemePreference = 'system' | 'light' | 'dark';
+export type ThemePreference = "system" | "light" | "dark";

@@ -14,6 +14,8 @@ export type PayBreakdown = {
   totalHours: number;
   regularHours: number;
   overtimeHours: number;
+  regularEarnings: number;
+  overtimeEarnings: number;
   grossPay: number;
   estimatedTaxes: number;
   estimatedNetPay: number;
@@ -36,13 +38,14 @@ export function calculateWeeklyRegularAndOvertimeHours(
   }
 
   const totalMinutes = shifts.reduce(
-    (sum, s) => sum + calculateWorkedMinutes(s, asOf),
+    (sum, shift) => sum + calculateWorkedMinutes(shift, asOf),
     0,
   );
-  const latest = shifts[shifts.length - 1];
+  const latest = [...shifts].sort(
+    (a, b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime(),
+  )[shifts.length - 1];
   const overtimeEnabled = latest.overtimeEnabledSnapshot;
-  const thresholdMinutes = latest.overtimeThresholdSnapshot * 60;
-
+  const thresholdMinutes = Math.max(0, latest.overtimeThresholdSnapshot * 60);
   const totalHours = totalMinutes / 60;
 
   if (!overtimeEnabled) {
@@ -51,17 +54,51 @@ export function calculateWeeklyRegularAndOvertimeHours(
 
   const excludedMinutes = shifts
     .filter(
-      (s) =>
-        (s.isHolidayPay && !s.holidayPayInOvertimeSnapshot) ||
-        (s.isPTO && !s.ptoInOvertimeSnapshot),
+      (shift) =>
+        (shift.isHolidayPay && !shift.holidayPayInOvertimeSnapshot) ||
+        (shift.isPTO && !shift.ptoInOvertimeSnapshot),
     )
-    .reduce((sum, s) => sum + calculateWorkedMinutes(s, asOf), 0);
+    .reduce((sum, shift) => sum + calculateWorkedMinutes(shift, asOf), 0);
   const minutesTowardOvertime = Math.max(0, totalMinutes - excludedMinutes);
-
   const overtimeMinutes = Math.max(0, minutesTowardOvertime - thresholdMinutes);
   const overtimeHours = overtimeMinutes / 60;
   const regularHours = totalHours - overtimeHours;
+
   return { totalHours, regularHours, overtimeHours };
+}
+
+function getOvertimeMinutesByShift(
+  shifts: Shift[],
+  asOf: Date,
+): Map<string, number> {
+  const ordered = [...shifts].sort(
+    (a, b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime(),
+  );
+  const overtimeMinutesByShift = new Map<string, number>();
+  const latest = ordered[ordered.length - 1];
+  if (!latest?.overtimeEnabledSnapshot) return overtimeMinutesByShift;
+
+  const thresholdMinutes = Math.max(0, latest.overtimeThresholdSnapshot * 60);
+  let eligibleMinutes = 0;
+  for (const shift of ordered) {
+    const workedMinutes = calculateWorkedMinutes(shift, asOf);
+    const excludedFromThreshold =
+      (shift.isHolidayPay && !shift.holidayPayInOvertimeSnapshot) ||
+      (shift.isPTO && !shift.ptoInOvertimeSnapshot);
+    if (excludedFromThreshold) {
+      overtimeMinutesByShift.set(shift.id, 0);
+      continue;
+    }
+
+    const regularMinutes = Math.max(
+      0,
+      Math.min(workedMinutes, thresholdMinutes - eligibleMinutes),
+    );
+    const overtimeMinutes = Math.max(0, workedMinutes - regularMinutes);
+    overtimeMinutesByShift.set(shift.id, overtimeMinutes);
+    eligibleMinutes += workedMinutes;
+  }
+  return overtimeMinutesByShift;
 }
 
 export function calculateGrossPay(
@@ -102,39 +139,51 @@ export function calculateWeeklyPay(
       totalHours: 0,
       regularHours: 0,
       overtimeHours: 0,
+      regularEarnings: 0,
+      overtimeEarnings: 0,
       grossPay: 0,
       estimatedTaxes: 0,
       estimatedNetPay: 0,
     };
   }
+
   const { totalHours, regularHours, overtimeHours } =
     calculateWeeklyRegularAndOvertimeHours(shifts, asOf);
-  const latest = shifts[shifts.length - 1];
-  const rate = latest.hourlyRateSnapshot;
-  const multiplier = latest.overtimeMultiplierSnapshot;
-  const taxPercent = latest.taxPercentSnapshot;
+  const ordered = [...shifts].sort(
+    (a, b) => new Date(a.clockIn).getTime() - new Date(b.clockIn).getTime(),
+  );
+  const overtimeMinutesByShift = getOvertimeMinutesByShift(ordered, asOf);
+  const overtimeEarnings = ordered.reduce((sum, shift) => {
+    const overtimeHoursForShift =
+      (overtimeMinutesByShift.get(shift.id) ?? 0) / 60;
+    return (
+      sum +
+      overtimeHoursForShift *
+        shift.hourlyRateSnapshot *
+        shift.overtimeMultiplierSnapshot
+    );
+  }, 0);
+  const regularEarnings = ordered.reduce((sum, shift) => {
+    const workedHours = calculateWorkedHours(shift, asOf);
+    const overtimeHoursForShift =
+      (overtimeMinutesByShift.get(shift.id) ?? 0) / 60;
+    return (
+      sum + (workedHours - overtimeHoursForShift) * shift.hourlyRateSnapshot
+    );
+  }, 0);
+  const grossPay = regularEarnings + overtimeEarnings;
+  const latest = ordered[ordered.length - 1];
+  const estimatedTaxes = calculateEstimatedTaxes(
+    grossPay,
+    latest.taxPercentSnapshot,
+  );
 
-  // Weight the hourly rate per shift for regular hours so historical rate
-  // changes are respected, then apply overtime at the latest snapshot.
-  let grossPay: number;
-  const ratesDiffer = shifts.some((s) => s.hourlyRateSnapshot !== rate);
-  if (!ratesDiffer) {
-    grossPay = calculateGrossPay(regularHours, overtimeHours, rate, multiplier);
-  } else {
-    const perShift = shifts.map((s) => ({
-      hours: calculateWorkedHours(s, asOf),
-      rate: s.hourlyRateSnapshot,
-    }));
-    const baseGross = perShift.reduce((sum, p) => sum + p.hours * p.rate, 0);
-    const overtimePremium = overtimeHours * rate * Math.max(0, multiplier - 1);
-    grossPay = baseGross + overtimePremium;
-  }
-
-  const estimatedTaxes = calculateEstimatedTaxes(grossPay, taxPercent);
   return {
     totalHours,
     regularHours,
     overtimeHours,
+    regularEarnings,
+    overtimeEarnings,
     grossPay,
     estimatedTaxes,
     estimatedNetPay: grossPay - estimatedTaxes,

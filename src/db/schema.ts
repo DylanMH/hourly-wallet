@@ -52,8 +52,6 @@ CREATE TABLE IF NOT EXISTS shifts (
   date TEXT NOT NULL,
   clock_in TEXT NOT NULL,
   clock_out TEXT,
-  lunch_start TEXT,
-  lunch_end TEXT,
   notes TEXT,
   is_holiday_pay INTEGER NOT NULL,
   is_pto INTEGER NOT NULL,
@@ -69,6 +67,15 @@ CREATE TABLE IF NOT EXISTS shifts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_shifts_date ON shifts(date);
+
+CREATE TABLE IF NOT EXISTS shift_lunches (
+  id TEXT PRIMARY KEY NOT NULL,
+  shift_id TEXT NOT NULL REFERENCES shifts(id) ON DELETE CASCADE,
+  start TEXT NOT NULL,
+  end TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_shift_lunches_shift_id ON shift_lunches(shift_id);
 
 CREATE TABLE IF NOT EXISTS shift_breaks (
   id TEXT PRIMARY KEY NOT NULL,

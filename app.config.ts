@@ -3,9 +3,9 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 const APP_VARIANT = process.env.APP_VARIANT ?? "production";
 
 const getAppName = () => {
-  if (APP_VARIANT === "development") return "hourly-wallet-dev";
-  if (APP_VARIANT === "preview") return "hourly-wallet-preview";
-  return "Hourly Wallet";
+  if (APP_VARIANT === "development") return "DevHourlyWallet";
+  if (APP_VARIANT === "preview") return "PrevHourlyWallet";
+  return "HourlyWallet";
 };
 
 const getScheme = () => {
@@ -24,7 +24,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: getAppName(),
   slug: "hourly-wallet",
-  version: "2.1.0",
+  version: "2.2.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
   scheme: getScheme(),

@@ -6,6 +6,8 @@ import { AppState, AppStateStatus } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { processAutopayBills } from "@/features/bills/billService";
+import { useActiveShift } from "@/features/clock/useActiveShift";
+import { useClockedInNotification } from "@/features/clock/useClockedInNotification";
 import { bootstrapApp } from "@/features/settings/settingsService";
 import { toDateKey } from "@/lib/dates";
 import { initSentry } from "@/lib/sentry";
@@ -18,6 +20,11 @@ export default function RootLayout() {
   const { colors, isDark } = useTheme();
   const hydrated = useAppStore((s) => s.hydrated);
   const lastDateKey = useRef(toDateKey(new Date()));
+
+  // Global notification lifecycle — ensures the foreground-service notification
+  // is restored on app restart and foreground, regardless of which tab is active.
+  const { shift, status } = useActiveShift();
+  useClockedInNotification(shift, status);
 
   useEffect(() => {
     initSentry();

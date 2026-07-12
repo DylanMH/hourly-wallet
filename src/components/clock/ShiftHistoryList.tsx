@@ -8,9 +8,8 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { deleteShift } from "@/db/queries/shiftQueries";
 import {
-    calculateLunchMinutes,
     calculateWorkedHours,
-    calculateWorkedMinutes,
+    calculateWorkedMinutes
 } from "@/lib/calculations/shifts";
 import { formatFullDate, formatTime } from "@/lib/dates";
 import { hapticWarning } from "@/lib/haptics";
@@ -62,7 +61,6 @@ export function ShiftHistoryList({
         const gross =
           calculateWorkedHours(shift, now) * shift.hourlyRateSnapshot;
         const jobName = jobNameById?.[shift.jobId];
-        const lunchMinutes = calculateLunchMinutes(shift, now);
         return (
           <Card key={shift.id} style={styles.item}>
             <View style={styles.itemMain}>
@@ -81,13 +79,26 @@ export function ShiftHistoryList({
                 {"  ·  ~"}
                 {formatCurrency(gross)} gross
               </Text>
-              {shift.lunchStart ? (
-                <Text style={[typography.caption, { color: colors.textMuted }]}>
-                  Lunch: {formatTime(shift.lunchStart)} –{" "}
-                  {shift.lunchEnd ? formatTime(shift.lunchEnd) : "in progress"}{" "}
-                  · {formatHoursMinutes(lunchMinutes)}
-                </Text>
-              ) : null}
+              {shift.lunches.map((l, i) => {
+                const lunchMins = l.end
+                  ? Math.max(
+                      0,
+                      differenceInMinutes(parseISO(l.end), parseISO(l.start)),
+                    )
+                  : now
+                    ? Math.max(0, differenceInMinutes(now, parseISO(l.start)))
+                    : 0;
+                return (
+                  <Text
+                    key={l.id}
+                    style={[typography.caption, { color: colors.textMuted }]}
+                  >
+                    Lunch {i + 1}: {formatTime(l.start)} –{" "}
+                    {l.end ? formatTime(l.end) : "in progress"} ·{" "}
+                    {formatHoursMinutes(lunchMins)}
+                  </Text>
+                );
+              })}
               {shift.breaks.map((b, i) => {
                 const breakMinutes = b.end
                   ? Math.max(

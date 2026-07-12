@@ -13,7 +13,7 @@ import { useAppStore } from "@/state/appStore";
 
 export function getClockStatus(shift: Shift | null): ClockStatus {
   if (!shift || shift.clockOut) return "not-clocked-in";
-  if (shift.lunchStart && !shift.lunchEnd) return "on-lunch";
+  if (shift.lunches.some((l) => !l.end)) return "on-lunch";
   if (shift.breaks.some((b) => !b.end)) return "on-break";
   return "clocked-in";
 }
@@ -30,6 +30,7 @@ async function createShiftForJob(
     jobId: job.id,
     date: toDateKey(clockInTime),
     clockIn: clockInTime.toISOString(),
+    lunches: [],
     breaks: [],
     isHolidayPay: false,
     isPTO: false,
@@ -85,7 +86,9 @@ export async function clockOut(options?: {
     }
     shift = {
       ...shift,
-      lunchEnd: status === "on-lunch" ? nowIso : shift.lunchEnd,
+      lunches: shift.lunches.map((l) =>
+        l.end || status !== "on-lunch" ? l : { ...l, end: nowIso },
+      ),
       breaks: shift.breaks.map((b) => (b.end ? b : { ...b, end: nowIso })),
     };
   }
@@ -102,10 +105,15 @@ export async function startLunch(): Promise<Shift> {
   if (status === "on-lunch") throw new Error("Lunch is already active.");
   if (status === "on-break")
     throw new Error("End your break before starting lunch.");
-  if (active.lunchStart) throw new Error("Lunch was already taken this shift.");
   const updated = await updateShift({
     ...active,
-    lunchStart: new Date().toISOString(),
+    lunches: [
+      ...active.lunches,
+      {
+        id: generateId(),
+        start: new Date().toISOString(),
+      },
+    ],
   });
   useAppStore.getState().bumpShifts();
   return updated;
@@ -116,9 +124,10 @@ export async function endLunch(): Promise<Shift> {
   if (!active || getClockStatus(active) !== "on-lunch") {
     throw new Error("No active lunch.");
   }
+  const nowIso = new Date().toISOString();
   const updated = await updateShift({
     ...active,
-    lunchEnd: new Date().toISOString(),
+    lunches: active.lunches.map((l) => (l.end ? l : { ...l, end: nowIso })),
   });
   useAppStore.getState().bumpShifts();
   return updated;

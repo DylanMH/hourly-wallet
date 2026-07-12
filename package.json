@@ -1,7 +1,7 @@
 {
   "name": "hourly-wallet",
   "main": "expo-router/entry",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "dependencies": {
     "@expo/ui": "~57.0.4",
     "@notifee/react-native": "^9.1.8",
@@ -62,7 +62,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "build:preview:android": "bash scripts/build-preview-android.sh",
-    "build:dev:android": "bash scripts/build-development-android.sh"
+    "build:dev:android": "bash scripts/build-development-android.sh",
+    "build:production:android": "bash scripts/build-production-android.sh",
+    "eas:build:production": "eas build --platform android --profile production"
   },
   "expo": {
     "doctor": {

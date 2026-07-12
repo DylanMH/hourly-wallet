@@ -1,5 +1,47 @@
 # Changelog
 
+## 2.2.0
+
+### Added
+
+- Android foreground-service active-shift notification using Notifee: single persistent ongoing notification that starts on clock-in, updates on lunch/break/state changes, and stops on clock-out or shift deletion.
+- Notification actions for starting/ending lunch, starting/ending break, and clocking out directly from the notification.
+- Notification states for Clocked in, On lunch, and On break that match the Clock screen and dashboard.
+- Regular vs. overtime earnings breakdown across dashboard, reports, active shift display, and shift history.
+- Conservative monthly projection engine with settings for projection mode, expected workdays, expected hours per workday, and optional projected overtime.
+- Monthly affordability card v2.2: earned so far, projected remaining income, projected monthly gross/net, bills paid/remaining, projected surplus/shortfall, and on-track/close/shortfall status.
+- Reports v2.2 with regular/overtime hours and earnings, estimated taxes/net, and conservative projected monthly earnings where relevant.
+- Settings v2.2 for notifications, projection behavior, and overtime display preferences.
+- Support for multiple lunch breaks within a single shift via a new `shift_lunches` table.
+- Safe database migration from v6 to v7 that creates `shift_lunches`, migrates legacy `lunch_start`/`lunch_end` data, and preserves all existing shifts and bills.
+- Backup/import support for legacy lunch fields and the new `lunches` array.
+- Local production AAB build script (`build:production:android`) for Play Store releases.
+
+### Changed
+
+- Shift type now stores an array of `ShiftLunch` objects instead of single `lunchStart`/`lunchEnd`.
+- Clock service allows starting a second lunch after ending a previous one; only one lunch can be active at a time.
+- Worked-time calculations now sum all completed and active lunch periods to avoid flickering or incorrect increments while on lunch.
+- Shift history lists each lunch entry separately with start/end times and duration.
+- Monthly projections now default to conservative actual-earnings-plus-scheduled-hours logic and avoid overestimating from one heavy week.
+- Dashboard, reports, notifications, and affordability card share the same projection and earnings calculations.
+- App display names updated for a cleaner launcher label: production is "HourlyWallet", preview is "PrevHourlyWallet", and development is "DevHourlyWallet".
+
+### Fixed
+
+- Worked time no longer incorrectly increments by a minute while actively on lunch before the next UI update.
+- Multiple sequential lunches are now fully supported instead of being blocked after the first lunch.
+- `ShiftFormModal` preserves additional lunches when editing a shift with multiple lunch entries.
+- Data import from older backups converts legacy `lunchStart`/`lunchEnd` into the new `lunches` array without data loss.
+
+### Technical
+
+- Database schema version bumped to 7 with a new `shift_lunches` table; `shifts` no longer stores `lunch_start`/`lunch_end`.
+- Added the `ShiftLunch` TypeScript type and updated `Shift` to require `lunches: ShiftLunch[]`.
+- Updated `clockService`, `shiftQueries`, calculation helpers, UI components, and backup schema for the lunches array.
+- Added/updated Jest fixtures and tests for multiple-lunch scenarios and the new earnings/projection logic.
+- Added an EAS production build command (`eas:build:production`) using `app-bundle` for Google Play.
+
 ## 2.1.0
 
 ### Added

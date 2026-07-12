@@ -220,23 +220,31 @@ export default function ReportsScreen() {
 
       <View style={styles.statRow}>
         <StatCard
-          label="Hours"
-          value={formatHoursMinutes(report.pay.totalHours * 60)}
-          sublabel={
-            report.pay.overtimeHours > 0
-              ? `${report.pay.overtimeHours.toFixed(1)}h overtime`
-              : "no overtime"
-          }
+          label="Regular earnings"
+          value={`$${report.pay.regularEarnings.toFixed(2)}`}
+          sublabel={`${formatHoursMinutes(report.pay.regularHours * 60)} regular`}
         />
         <StatCard
-          label="Est. taxes"
-          value={`$${report.pay.estimatedTaxes.toFixed(2)}`}
+          label="Overtime earnings"
+          value={`$${report.pay.overtimeEarnings.toFixed(2)}`}
+          sublabel={`${formatHoursMinutes(report.pay.overtimeHours * 60)} overtime`}
+          tone={report.pay.overtimeHours > 0 ? "warning" : "default"}
         />
       </View>
       <View style={styles.statRow}>
         <StatCard
+          label="Total hours"
+          value={formatHoursMinutes(report.pay.totalHours * 60)}
+        />
+        <StatCard
           label="Est. gross pay"
           value={`$${report.pay.grossPay.toFixed(2)}`}
+        />
+      </View>
+      <View style={styles.statRow}>
+        <StatCard
+          label="Est. taxes"
+          value={`$${report.pay.estimatedTaxes.toFixed(2)}`}
         />
         <StatCard
           label="Est. net pay"

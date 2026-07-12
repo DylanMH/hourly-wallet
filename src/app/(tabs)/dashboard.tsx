@@ -35,7 +35,6 @@ export default function DashboardScreen() {
     weeklyPay,
     monthlyProjection,
     affordability,
-    netSoFar,
     billsPaidAmount,
     billsRemainingAmount,
     occurrences,
@@ -129,7 +128,7 @@ export default function DashboardScreen() {
       <WeeklyPayCard pay={weeklyPay} />
       <MonthlyAffordabilityCard
         affordability={affordability}
-        netSoFar={netSoFar}
+        projection={monthlyProjection}
         billsPaid={billsPaidAmount}
         billsRemaining={billsRemainingAmount}
       />
